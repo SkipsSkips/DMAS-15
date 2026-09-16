@@ -1,56 +1,134 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.4" snapToGrid="true">
   <code><![CDATA[;; ====================================================================
-;; OCTOPUS CAMOUFLAGE DMAS SIMULATION
-;; Self-contained version: all parameters are defined in globals.
+;; HIDE OR FLEE?
+;; Adaptive Predator-Prey Multi-Agent Simulation
+;; NetLogo 7.0.4
+;;
+;; Research question:
+;; Under which environmental and predator-prey conditions is it better
+;; for prey to stay still, hide, flee, or seek nearby cover?
 ;; ====================================================================
 
 globals [
+  ;; ------------------------------------------------------------
   ;; Population settings
+  ;; ------------------------------------------------------------
   initial-octopuses
   initial-predators
 
+  ;; ------------------------------------------------------------
   ;; Movement and detection settings
+  ;; ------------------------------------------------------------
   predator-detection-radius-setting
   predator-speed-setting
   prey-speed-setting
   prey-reaction-time-setting
   capture-distance
 
+  ;; ------------------------------------------------------------
   ;; Predator search settings
+  ;; ------------------------------------------------------------
   predator-wander-angle
   predator-search-speed-factor
 
-  ;; Adaptive DMAS thresholds
+  ;; ------------------------------------------------------------
+  ;; Adaptive decision settings
+  ;; ------------------------------------------------------------
   threat-awareness-radius
   hide-cover-threshold
   critical-threat-distance
-  flee-threat-distance
   seek-cover-radius
   minimum-cover-target
   minimum-cover-improvement
+  minimum-decision-score
 
+  ;; ------------------------------------------------------------
   ;; Detection equation settings
+  ;; ------------------------------------------------------------
   cover-impact-strength
   hide-detection-multiplier
   motion-detection-multiplier
 
+  ;; ------------------------------------------------------------
   ;; Environment settings
+  ;;
+  ;; cover-amount-category:
+  ;;   "low"    -> target mean cover 0.15
+  ;;   "medium" -> target mean cover 0.45
+  ;;   "high"   -> target mean cover 0.75
+  ;;
+  ;; cover-arrangement:
+  ;;   "uniform"
+  ;;   "patchy"
+  ;;   "mixed"
+  ;; ------------------------------------------------------------
+  cover-amount-category
+  cover-arrangement
   reef-cluster-count
   reef-cluster-radius
+  target-cover-mean
+  realized-cover-mean
 
-  ;; Strategy and display settings
+  ;; ------------------------------------------------------------
+  ;; Strategy settings
+  ;;
+  ;; "adaptive-dmas"
+  ;; "hide"
+  ;; "flee"
+  ;; "still"
+  ;; "seek-cover"
+  ;; "experimental-assigned"
+  ;; ------------------------------------------------------------
   octopus-strategy-mode
+
+  ;; ------------------------------------------------------------
+  ;; Experiment settings
+  ;; ------------------------------------------------------------
+  experiment-duration
+  experiment-seed
+
+  ;; ------------------------------------------------------------
+  ;; Display settings
+  ;; ------------------------------------------------------------
   show-predator-radii?
   show-state-labels?
 
-  ;; Analytics
+  ;; ------------------------------------------------------------
+  ;; Population analytics
+  ;; ------------------------------------------------------------
   starting-octopus-count
   total-captures
+  cumulative-survival
+
+  ;; ------------------------------------------------------------
+  ;; Predator analytics
+  ;; ------------------------------------------------------------
   pursuit-events
+  detection-events
+
+  ;; ------------------------------------------------------------
+  ;; Decision analytics
+  ;;
+  ;; These count transitions into a strategy. An octopus remaining
+  ;; hidden for 20 ticks therefore produces one hide decision rather
+  ;; than 20 repeated hide decisions.
+  ;; ------------------------------------------------------------
+  hide-decisions
+  flee-decisions
+  still-decisions
+  seek-cover-decisions
+
+  ;; ------------------------------------------------------------
+  ;; Capture-time analytics
+  ;; ------------------------------------------------------------
+  capture-ticks
+  first-capture-tick
+  last-capture-tick
 ]
 
 patches-own [
+  ;; Continuous environmental cover in the range 0 to 1.
   cover-density
 ]
 
@@ -58,12 +136,24 @@ breed [octopuses octopus]
 breed [predators predator]
 
 octopuses-own [
+  ;; Fixed policy assigned to this octopus.
   policy
+
+  ;; Action currently selected by this octopus.
   active-strategy
+
+  ;; Last strategy counted in the cumulative decision statistics.
+  last-counted-strategy
+
+  ;; Delay between detecting a threat and performing an action.
   reaction-timer
   is-reacting?
+
+  ;; State variables used by predator detection.
   is-hidden?
   is-moving?
+
+  ;; Individual movement speed.
   prey-speed
 ]
 
@@ -74,8 +164,16 @@ predators-own [
 ]
 
 ;; ====================================================================
-;; DEFAULT PARAMETERS
+;; INITIAL DEFAULTS
 ;; ====================================================================
+
+;; startup runs when the model is first opened.
+;;
+;; Defaults are deliberately not reset by setup. This allows Interface
+;; controls and BehaviorSpace to change parameters before setup runs.
+to startup
+  set-default-parameters
+end
 
 to set-default-parameters
   ;; Population
@@ -89,18 +187,18 @@ to set-default-parameters
   set prey-reaction-time-setting 2
   set capture-distance 0.5
 
-  ;; Predator wandering
+  ;; Predator searching
   set predator-wander-angle 15
   set predator-search-speed-factor 0.5
 
-  ;; Adaptive strategy thresholds
+  ;; Adaptive decision model
   set threat-awareness-radius 10
   set hide-cover-threshold 0.55
   set critical-threat-distance 3
-  set flee-threat-distance 6
   set seek-cover-radius 5
-  set minimum-cover-target 0.6
-  set minimum-cover-improvement 0.1
+  set minimum-cover-target 0.60
+  set minimum-cover-improvement 0.10
+  set minimum-decision-score 0.08
 
   ;; Detection model
   set cover-impact-strength 0.8
@@ -108,21 +206,142 @@ to set-default-parameters
   set motion-detection-multiplier 1.5
 
   ;; Environment
+  set cover-amount-category "medium"
+  set cover-arrangement "patchy"
   set reef-cluster-count 15
   set reef-cluster-radius 3
+  set target-cover-mean 0.45
+  set realized-cover-mean 0
 
-  ;; Strategy mode:
-  ;; "adaptive-dmas"
-  ;; "experimental-assigned"
-  ;; "hide"
-  ;; "flee"
-  ;; "still"
-  ;; "seek-cover"
+  ;; Strategy
   set octopus-strategy-mode "adaptive-dmas"
 
-  ;; Visual options
+  ;; Experiment
+  set experiment-duration 500
+  set experiment-seed 1
+
+  ;; Display
   set show-predator-radii? true
   set show-state-labels? true
+end
+
+;; Ensures that setup remains safe if the model is imported, or if an
+;; Interface control supplies an invalid value.
+;;
+;; Valid values already supplied by BehaviorSpace or Interface widgets
+;; are preserved.
+to validate-parameters
+  if initial-octopuses < 1 [
+    set initial-octopuses 40
+  ]
+
+  if initial-predators < 0 [
+    set initial-predators 3
+  ]
+
+  if predator-detection-radius-setting <= 0 [
+    set predator-detection-radius-setting 10
+  ]
+
+  if predator-speed-setting < 0 [
+    set predator-speed-setting 0.8
+  ]
+
+  if prey-speed-setting < 0 [
+    set prey-speed-setting 0.6
+  ]
+
+  if prey-reaction-time-setting < 0 [
+    set prey-reaction-time-setting 2
+  ]
+
+  if capture-distance <= 0 [
+    set capture-distance 0.5
+  ]
+
+  if predator-wander-angle < 0 [
+    set predator-wander-angle 15
+  ]
+
+  if predator-search-speed-factor < 0 [
+    set predator-search-speed-factor 0.5
+  ]
+
+  if threat-awareness-radius <= 0 [
+    set threat-awareness-radius 10
+  ]
+
+  if hide-cover-threshold < 0 or hide-cover-threshold > 1 [
+    set hide-cover-threshold 0.55
+  ]
+
+  if critical-threat-distance < 0 [
+    set critical-threat-distance 3
+  ]
+
+  if seek-cover-radius <= 0 [
+    set seek-cover-radius 5
+  ]
+
+  if minimum-cover-target < 0 or minimum-cover-target > 1 [
+    set minimum-cover-target 0.60
+  ]
+
+  if minimum-cover-improvement < 0 [
+    set minimum-cover-improvement 0.10
+  ]
+
+  if minimum-decision-score < 0 [
+    set minimum-decision-score 0.08
+  ]
+
+  if cover-impact-strength < 0 or cover-impact-strength > 1 [
+    set cover-impact-strength 0.8
+  ]
+
+  if hide-detection-multiplier < 0 or
+     hide-detection-multiplier > 1 [
+    set hide-detection-multiplier 0.15
+  ]
+
+  if motion-detection-multiplier < 0 [
+    set motion-detection-multiplier 1.5
+  ]
+
+  if reef-cluster-count < 0 [
+    set reef-cluster-count 15
+  ]
+
+  if reef-cluster-radius <= 0 [
+    set reef-cluster-radius 3
+  ]
+
+  if not member? cover-amount-category
+    ["low" "medium" "high"] [
+    set cover-amount-category "medium"
+  ]
+
+  if not member? cover-arrangement
+    ["uniform" "patchy" "mixed"] [
+    set cover-arrangement "patchy"
+  ]
+
+  if not member? octopus-strategy-mode
+    ["adaptive-dmas"
+     "hide"
+     "flee"
+     "still"
+     "seek-cover"
+     "experimental-assigned"] [
+    set octopus-strategy-mode "adaptive-dmas"
+  ]
+
+  if experiment-duration <= 0 [
+    set experiment-duration 500
+  ]
+
+  ;; NetLogo random-seed expects an integer.
+  set experiment-seed round experiment-seed
 end
 
 ;; ====================================================================
@@ -130,49 +349,196 @@ end
 ;; ====================================================================
 
 to setup
-  clear-all
-  set-default-parameters
+  validate-parameters
 
-  set total-captures 0
-  set pursuit-events 0
+  ;; Do not use clear-all here because clear-all would reset parameters
+  ;; supplied by Interface widgets or BehaviorSpace.
+  clear-turtles
+  clear-patches
+  clear-drawing
+  clear-all-plots
 
+  ;; Apply the seed before any random environment or agent setup.
+  random-seed experiment-seed
+
+  reset-analytics
   setup-environment
   setup-octopuses
   setup-predators
 
   set starting-octopus-count count octopuses
+  set realized-cover-mean average-world-cover
 
   reset-ticks
   render-predator-perception
   safely-update-live-plots
 end
 
+to reset-analytics
+  set starting-octopus-count 0
+  set total-captures 0
+  set cumulative-survival 0
+
+  set pursuit-events 0
+  set detection-events 0
+
+  set hide-decisions 0
+  set flee-decisions 0
+  set still-decisions 0
+  set seek-cover-decisions 0
+
+  set capture-ticks []
+  set first-capture-tick -1
+  set last-capture-tick -1
+end
+
+;; ====================================================================
+;; ENVIRONMENT
+;; ====================================================================
+
 to setup-environment
-  ask patches [
-    set cover-density random-float 0.10
+  set target-cover-mean cover-target-for-category
+
+  if cover-arrangement = "uniform" [
+    setup-uniform-cover
   ]
 
-  let cluster-count min (list reef-cluster-count count patches)
+  if cover-arrangement = "patchy" [
+    setup-patchy-cover
+  ]
 
-  if cluster-count > 0 [
-    ask n-of cluster-count patches [
-      let cluster-center self
+  if cover-arrangement = "mixed" [
+    setup-mixed-cover
+  ]
 
-      ask patches in-radius reef-cluster-radius [
-        let divisor max (list 0.1 reef-cluster-radius)
-        let normalized-distance distance cluster-center / divisor
-        let cluster-strength max (list 0 (1 - normalized-distance))
+  normalize-cover-to-target target-cover-mean
+  clamp-cover-values
 
-        set cover-density min
-          (list 1
-            (cover-density
-              + cluster-strength
-              * (0.25 + random-float 0.65)))
+  set realized-cover-mean average-world-cover
+  recolor-environment
+end
+
+to-report cover-target-for-category
+  if cover-amount-category = "low" [
+    report 0.15
+  ]
+
+  if cover-amount-category = "medium" [
+    report 0.45
+  ]
+
+  if cover-amount-category = "high" [
+    report 0.75
+  ]
+
+  report 0.45
+end
+
+;; A uniform environment has small local variation around the target.
+to setup-uniform-cover
+  ask patches [
+    set cover-density
+      clamp-value
+        (target-cover-mean + random-normal 0 0.035)
+        0
+        1
+  ]
+end
+
+;; A patchy environment begins with very little background cover.
+;; Spatial clusters then create separated high-cover areas.
+to setup-patchy-cover
+  ask patches [
+    set cover-density random-float 0.025
+  ]
+
+  add-cover-clusters 1
+end
+
+;; A mixed environment combines moderate background cover and clusters.
+to setup-mixed-cover
+  ask patches [
+    set cover-density
+      clamp-value
+        ((target-cover-mean * 0.35) + random-float 0.08)
+        0
+        1
+  ]
+
+  add-cover-clusters 0.75
+end
+
+to add-cover-clusters [strength-factor]
+  let cluster-count
+    min (list reef-cluster-count count patches)
+
+  if cluster-count <= 0 [
+    stop
+  ]
+
+  ask n-of cluster-count patches [
+    let cluster-center self
+
+    ask patches in-radius reef-cluster-radius [
+      let divisor max (list 0.1 reef-cluster-radius)
+      let normalized-distance
+        distance cluster-center / divisor
+
+      let cluster-strength
+        max (list 0 (1 - normalized-distance))
+
+      let random-strength
+        0.30 + random-float 0.70
+
+      set cover-density
+        cover-density
+        + cluster-strength
+        * random-strength
+        * strength-factor
+    ]
+  ]
+end
+
+;; Adjusts mean cover without removing the spatial pattern.
+;;
+;; If the current mean is below the target, every patch moves toward 1
+;; proportionally. If it is above the target, every patch is scaled
+;; proportionally toward 0.
+to normalize-cover-to-target [target-mean]
+  let bounded-target clamp-value target-mean 0 1
+  let current-mean mean [cover-density] of patches
+
+  if current-mean < bounded-target [
+    if current-mean < 1 [
+      let increase-proportion
+        (bounded-target - current-mean)
+        / (1 - current-mean)
+
+      ask patches [
+        set cover-density
+          cover-density
+          + (1 - cover-density) * increase-proportion
       ]
     ]
   ]
 
-  recolor-environment
+  if current-mean > bounded-target [
+    if current-mean > 0 [
+      let reduction-factor
+        bounded-target / current-mean
+
+      ask patches [
+        set cover-density
+          cover-density * reduction-factor
+      ]
+    ]
+  ]
+end
+
+to clamp-cover-values
+  ask patches [
+    set cover-density clamp-value cover-density 0 1
+  ]
 end
 
 to recolor-environment
@@ -180,10 +546,21 @@ to recolor-environment
     ifelse cover-density < 0.15 [
       set pcolor 37
     ] [
-      set pcolor scale-color green cover-density -0.10 1.10
+      set pcolor
+        scale-color green cover-density -0.10 1.10
     ]
   ]
 end
+
+to-report clamp-value [value minimum-value maximum-value]
+  report max
+    (list minimum-value
+      (min (list maximum-value value)))
+end
+
+;; ====================================================================
+;; AGENT SETUP
+;; ====================================================================
 
 to setup-octopuses
   create-octopuses initial-octopuses [
@@ -198,10 +575,13 @@ to setup-octopuses
     set is-reacting? false
     set is-hidden? false
     set is-moving? false
+
     set active-strategy "still"
+    set last-counted-strategy ""
 
     ifelse octopus-strategy-mode = "experimental-assigned" [
-      set policy one-of ["hide" "flee" "still" "seek-cover"]
+      set policy one-of
+        ["hide" "flee" "still" "seek-cover"]
     ] [
       set policy octopus-strategy-mode
     ]
@@ -218,16 +598,13 @@ to setup-predators
     set color red
     set size 1.8
 
-    set detection-radius predator-detection-radius-setting
+    set detection-radius
+      predator-detection-radius-setting
+
     set pred-speed predator-speed-setting
     set target-prey nobody
 
-    set label ""
-
-    if show-state-labels? [
-      set label "SEARCH"
-      set label-color white
-    ]
+    update-predator-search-visual
   ]
 end
 
@@ -236,7 +613,7 @@ end
 ;; ====================================================================
 
 to go
-  if not any? octopuses [
+  if run-complete? [
     render-predator-perception
     stop
   ]
@@ -249,34 +626,35 @@ to go
     execute-predator-logic
   ]
 
-  render-predator-perception
+  ;; Cumulative survival is measured in octopus-ticks.
+  ;; It is the number of surviving octopuses after predation in each
+  ;; completed simulation tick, summed over the run.
+  set cumulative-survival
+    cumulative-survival + count octopuses
 
   tick
+
+  render-predator-perception
   safely-update-live-plots
 end
 
+to-report run-complete?
+  report
+    ticks >= experiment-duration
+    or not any? octopuses
+end
+
 ;; ====================================================================
-;; PREY LOGIC
+;; PREY PERCEPTION AND DECISION LOGIC
 ;; ====================================================================
 
 to execute-prey-logic
-  let nearest-threat nobody
-
-  if any? predators [
-    set nearest-threat min-one-of predators [
-      distance myself
-    ]
-  ]
+  let nearest-threat nearest-predator
 
   select-active-strategy nearest-threat
 
-  let threat-present? false
-
-  if nearest-threat != nobody [
-    if distance nearest-threat <= threat-awareness-radius [
-      set threat-present? true
-    ]
-  ]
+  let threat-present?
+    threat-is-relevant? nearest-threat
 
   ifelse threat-present? [
     if reaction-timer > 0 [
@@ -307,10 +685,30 @@ to execute-prey-logic
   ]
 
   if active-strategy = "seek-cover" [
-    perform-seek-cover
+    perform-seek-cover nearest-threat
   ]
 
+  ;; Count only transitions into a new strategy.
+  record-strategy-transition
   update-octopus-visuals
+end
+
+to-report nearest-predator
+  if not any? predators [
+    report nobody
+  ]
+
+  report min-one-of predators [
+    distance myself
+  ]
+end
+
+to-report threat-is-relevant? [threat]
+  if threat = nobody [
+    report false
+  ]
+
+  report distance threat <= threat-awareness-radius
 end
 
 to select-active-strategy [threat]
@@ -321,56 +719,199 @@ to select-active-strategy [threat]
   ]
 end
 
+;; Adaptive policy:
+;;
+;; 1. Stay still when there is no predator in awareness range.
+;; 2. Flee when the predator is critically close.
+;; 3. Seek cover when better cover is useful, reachable, and offers
+;;    greater projected value than immediately hiding or fleeing.
+;; 4. Otherwise compare the local hide and flee scores.
+;; 5. Stay still when both scores are negligible.
 to evaluate-adaptive-strategy [threat]
-  if threat = nobody [
+  if not threat-is-relevant? threat [
     set active-strategy "still"
     stop
   ]
 
   let threat-distance distance threat
-  let local-cover cover-density
 
-  if threat-distance > threat-awareness-radius [
-    set active-strategy "still"
-    stop
-  ]
-
-  if local-cover >= hide-cover-threshold [
-    set active-strategy "hide"
-    stop
-  ]
-
+  ;; Emergency response.
   if threat-distance <= critical-threat-distance [
     set active-strategy "flee"
     stop
   ]
 
-  let target-cover-patch max-one-of
-    (patches in-radius seek-cover-radius)
-    [cover-density]
+  let current-hide-score hide-score threat
+  let current-flee-score flee-score threat
 
-  let useful-cover-available? false
+  let target-patch best-cover-patch
+  let should-seek? false
 
-  if target-cover-patch != nobody [
-    let target-cover [cover-density] of target-cover-patch
+  if target-patch != nobody [
+    if useful-cover-target? target-patch [
+      if cover-target-is-reachable? target-patch threat [
+        let projected-hide-score
+          hide-score-at-cover
+            [cover-density] of target-patch
+            threat
 
-    if target-cover >= minimum-cover-target [
-      if target-cover >= local-cover + minimum-cover-improvement [
-        set useful-cover-available? true
+        if projected-hide-score > current-hide-score [
+          if projected-hide-score > current-flee-score [
+            set should-seek? true
+          ]
+        ]
       ]
     ]
   ]
 
-  if useful-cover-available? [
+  if should-seek? [
     set active-strategy "seek-cover"
     stop
   ]
 
-  ifelse threat-distance <= flee-threat-distance [
-    set active-strategy "flee"
-  ] [
+  if max
+    (list current-hide-score current-flee-score)
+    < minimum-decision-score [
     set active-strategy "still"
+    stop
   ]
+
+  ifelse current-hide-score >= current-flee-score [
+    set active-strategy "hide"
+  ] [
+    set active-strategy "flee"
+  ]
+end
+
+;; Hiding becomes more valuable when:
+;; - local cover is strong;
+;; - camouflage has a strong effect;
+;; - the threat has not already reached critical distance.
+;;
+;; Score is constrained to 0..1.
+to-report hide-score [threat]
+  report hide-score-at-cover cover-density threat
+end
+
+to-report hide-score-at-cover [candidate-cover threat]
+  if threat = nobody [
+    report 0
+  ]
+
+  let bounded-cover clamp-value candidate-cover 0 1
+  let camouflage-strength
+    clamp-value
+      (1 - hide-detection-multiplier)
+      0
+      1
+
+  let urgency threat-urgency threat
+
+  ;; Hiding becomes somewhat less attractive when the predator is
+  ;; already very close, but emergency behavior is handled separately.
+  let reaction-safety
+    clamp-value (1 - 0.35 * urgency) 0 1
+
+  report clamp-value
+    (bounded-cover
+      * camouflage-strength
+      * reaction-safety)
+    0
+    1
+end
+
+;; Fleeing becomes more valuable when:
+;; - the predator is close;
+;; - prey speed is competitive with predator speed.
+;;
+;; Score is constrained to 0..1.
+to-report flee-score [threat]
+  if threat = nobody [
+    report 0
+  ]
+
+  let predator-speed
+    max (list 0.01 [pred-speed] of threat)
+
+  let relative-speed
+    clamp-value
+      (prey-speed / predator-speed)
+      0
+      1
+
+  report clamp-value
+    (threat-urgency threat * relative-speed)
+    0
+    1
+end
+
+to-report threat-urgency [threat]
+  if threat = nobody [
+    report 0
+  ]
+
+  if threat-awareness-radius <= 0 [
+    report 1
+  ]
+
+  report clamp-value
+    (1 - distance threat / threat-awareness-radius)
+    0
+    1
+end
+
+to-report best-cover-patch
+  let nearby-patches
+    patches in-radius seek-cover-radius
+
+  if not any? nearby-patches [
+    report nobody
+  ]
+
+  report max-one-of nearby-patches [
+    cover-density
+  ]
+end
+
+to-report useful-cover-target? [target-patch]
+  if target-patch = nobody [
+    report false
+  ]
+
+  let target-cover
+    [cover-density] of target-patch
+
+  report
+    target-cover >= minimum-cover-target
+    and target-cover
+      >= cover-density + minimum-cover-improvement
+end
+
+;; This is a simple local reachability estimate, not a prediction of the
+;; predator's complete future route.
+to-report cover-target-is-reachable? [target-patch threat]
+  if target-patch = nobody [
+    report false
+  ]
+
+  if threat = nobody [
+    report true
+  ]
+
+  if prey-speed <= 0 [
+    report false
+  ]
+
+  let travel-time
+    distance target-patch / prey-speed
+
+  let predator-speed
+    max (list 0.01 [pred-speed] of threat)
+
+  let estimated-threat-arrival
+    distance threat / predator-speed
+
+  report travel-time < estimated-threat-arrival
 end
 
 ;; ====================================================================
@@ -400,11 +941,10 @@ to perform-flee [threat]
   ]
 end
 
-to perform-seek-cover
-  let target-patch max-one-of
-    (patches in-radius seek-cover-radius)
-    [cover-density]
+to perform-seek-cover [threat]
+  let target-patch best-cover-patch
 
+  ;; Once usable cover has been reached, transition into hiding.
   if cover-density >= minimum-cover-target [
     set active-strategy "hide"
     set is-hidden? true
@@ -412,20 +952,17 @@ to perform-seek-cover
     stop
   ]
 
-  let useful-target? false
-
-  if target-patch != nobody [
-    if [cover-density] of target-patch >=
-       cover-density + minimum-cover-improvement [
-      set useful-target? true
+  ifelse useful-cover-target? target-patch [
+    ifelse cover-target-is-reachable? target-patch threat [
+      set is-hidden? false
+      set is-moving? true
+      face target-patch
+      safe-forward prey-speed
+    ] [
+      ;; The target is useful but cannot likely be reached in time.
+      set active-strategy "flee"
+      perform-flee threat
     ]
-  ]
-
-  ifelse useful-target? [
-    set is-hidden? false
-    set is-moving? true
-    face target-patch
-    safe-forward prey-speed
   ] [
     set active-strategy "still"
     set is-hidden? false
@@ -447,6 +984,35 @@ to safe-forward [step-size]
       fd step-size
     ]
   ]
+end
+
+;; ====================================================================
+;; DECISION ANALYTICS
+;; ====================================================================
+
+to record-strategy-transition
+  if active-strategy = last-counted-strategy [
+    stop
+  ]
+
+  if active-strategy = "hide" [
+    set hide-decisions hide-decisions + 1
+  ]
+
+  if active-strategy = "flee" [
+    set flee-decisions flee-decisions + 1
+  ]
+
+  if active-strategy = "still" [
+    set still-decisions still-decisions + 1
+  ]
+
+  if active-strategy = "seek-cover" [
+    set seek-cover-decisions
+      seek-cover-decisions + 1
+  ]
+
+  set last-counted-strategy active-strategy
 end
 
 ;; ====================================================================
@@ -524,82 +1090,137 @@ to execute-predator-logic
       distance myself
     ]
 
+    ;; A detection event occurs when a searching predator acquires a
+    ;; visible target after having no target.
+    if target-prey = nobody [
+      set detection-events detection-events + 1
+    ]
+
+    ;; A pursuit event occurs whenever a predator begins pursuing a
+    ;; different target.
     if selected-prey != target-prey [
       set pursuit-events pursuit-events + 1
     ]
 
     set target-prey selected-prey
-
-    set label ""
-
-    if show-state-labels? [
-      set label "CHASE"
-      set label-color yellow
-    ]
+    update-predator-chase-visual
 
     if target-prey != nobody [
       face target-prey
 
-      let distance-to-target distance target-prey
-      let movement-distance min
-        (list pred-speed distance-to-target)
+      let distance-to-target
+        distance target-prey
+
+      let movement-distance
+        min (list pred-speed distance-to-target)
 
       safe-forward movement-distance
 
       if target-prey != nobody [
         if distance target-prey <= capture-distance [
+          record-capture
+
           ask target-prey [
             die
           ]
 
-          set total-captures total-captures + 1
           set target-prey nobody
         ]
       ]
     ]
   ] [
     set target-prey nobody
-    set label ""
+    update-predator-search-visual
 
-    if show-state-labels? [
-      set label "SEARCH"
-      set label-color white
-    ]
-
-    rt (random-float (2 * predator-wander-angle)
-      - predator-wander-angle)
+    rt
+      (random-float (2 * predator-wander-angle)
+        - predator-wander-angle)
 
     safe-forward
       (pred-speed * predator-search-speed-factor)
   ]
 end
 
+to record-capture
+  set total-captures total-captures + 1
+  set capture-ticks lput ticks capture-ticks
+
+  if first-capture-tick = -1 [
+    set first-capture-tick ticks
+  ]
+
+  set last-capture-tick ticks
+end
+
+to update-predator-search-visual
+  set label ""
+
+  if show-state-labels? [
+    set label "SEARCH"
+    set label-color white
+  ]
+end
+
+to update-predator-chase-visual
+  set label ""
+
+  if show-state-labels? [
+    set label "CHASE"
+    set label-color yellow
+  ]
+end
+
+;; ====================================================================
+;; DETECTION MODEL
+;; ====================================================================
+
+;; Detection equation:
+;;
+;; effective radius =
+;;   base predator radius
+;;   * environmental cover modifier
+;;   * hiding modifier
+;;   * movement modifier
+;;
+;; Environmental cover always makes detection more difficult.
+;;
+;; Hiding effectiveness also depends on local cover:
+;; - at cover 0, hiding modifier = 1, so hiding has no special benefit;
+;; - at cover 1, the modifier reaches hide-detection-multiplier.
+;;
+;; Movement can increase detection through motion-detection-multiplier.
 to-report is-detected-by? [pred]
   if pred = nobody [
     report false
   ]
 
   let distance-to-predator distance pred
-  let base-radius [detection-radius] of pred
+  let base-radius
+    max (list 0 [detection-radius] of pred)
 
-  let local-cover max
-    (list 0 (min (list 1 cover-density)))
+  let local-cover
+    clamp-value cover-density 0 1
+
+  let cover-modifier
+    max
+      (list 0
+        (1 - local-cover * cover-impact-strength))
 
   let hide-modifier 1
 
   if is-hidden? [
-    set hide-modifier hide-detection-multiplier
+    set hide-modifier
+      1
+      - local-cover
+      * (1 - hide-detection-multiplier)
   ]
 
   let motion-modifier 1
 
   if is-moving? [
-    set motion-modifier motion-detection-multiplier
+    set motion-modifier
+      max (list 0 motion-detection-multiplier)
   ]
-
-  let cover-modifier max
-    (list 0
-      (1 - local-cover * cover-impact-strength))
 
   let effective-radius
     base-radius
@@ -607,10 +1228,11 @@ to-report is-detected-by? [pred]
     * hide-modifier
     * motion-modifier
 
-  set effective-radius max
-    (list 0 effective-radius)
+  set effective-radius
+    max (list 0 effective-radius)
 
-  report distance-to-predator <= effective-radius
+  report
+    distance-to-predator <= effective-radius
 end
 
 ;; ====================================================================
@@ -625,20 +1247,31 @@ to render-predator-perception
   ]
 
   ask predators [
+    ;; Red shows the predator's unmodified detection radius.
     draw-perception-ring detection-radius red
-    draw-perception-ring reference-detection-radius cyan
+
+    ;; Cyan shows a reference radius modified by cover on the
+    ;; predator's current patch. Actual prey detection also depends
+    ;; on the prey's cover, hiding state, and movement state.
+    draw-perception-ring
+      reference-detection-radius
+      cyan
   ]
 end
 
 to-report reference-detection-radius
-  let local-cover max
-    (list 0 (min (list 1 cover-density)))
+  let local-cover
+    clamp-value cover-density 0 1
 
-  let cover-modifier max
-    (list 0
-      (1 - local-cover * cover-impact-strength))
+  let cover-modifier
+    max
+      (list 0
+        (1 - local-cover * cover-impact-strength))
 
-  report detection-radius * cover-modifier
+  report
+    max
+      (list 0
+        (detection-radius * cover-modifier))
 end
 
 to draw-perception-ring [radius ring-color]
@@ -681,7 +1314,7 @@ to draw-perception-ring [radius ring-color]
 end
 
 ;; ====================================================================
-;; ANALYTICS
+;; PRIMARY OUTCOME REPORTERS
 ;; ====================================================================
 
 to-report survival-rate
@@ -690,7 +1323,19 @@ to-report survival-rate
   ]
 
   report
-    100 * count octopuses
+    100
+    * count octopuses
+    / starting-octopus-count
+end
+
+to-report capture-rate
+  if starting-octopus-count <= 0 [
+    report 0
+  ]
+
+  report
+    100
+    * total-captures
     / starting-octopus-count
 end
 
@@ -700,9 +1345,51 @@ to-report predator-capture-efficiency
   ]
 
   report
-    100 * total-captures
+    100
+    * total-captures
     / pursuit-events
 end
+
+;; Average number of ticks survived per original octopus.
+;;
+;; This is useful for comparing two runs that end with the same final
+;; survival rate but differ in how long prey survived.
+to-report mean-survival-time-contribution
+  if starting-octopus-count <= 0 [
+    report 0
+  ]
+
+  report
+    cumulative-survival
+    / starting-octopus-count
+end
+
+;; ====================================================================
+;; CAPTURE-TIME REPORTERS
+;; ====================================================================
+
+to-report mean-capture-tick
+  if empty? capture-ticks [
+    report -1
+  ]
+
+  report mean capture-ticks
+end
+
+to-report median-capture-tick
+  if empty? capture-ticks [
+    report -1
+  ]
+
+  report median capture-ticks
+end
+
+;; A result of -1 for capture-time reporters means that no capture has
+;; occurred during the run.
+
+;; ====================================================================
+;; ENVIRONMENT REPORTERS
+;; ====================================================================
 
 to-report average-cover-usage
   if not any? octopuses [
@@ -730,6 +1417,105 @@ to-report relative-cover-use
   report average-cover-usage / world-cover
 end
 
+;; Proportion of patches with enough cover to satisfy the hiding
+;; threshold. The result is in the range 0..1.
+to-report cover-availability
+  if not any? patches [
+    report 0
+  ]
+
+  report
+    count patches with [
+      cover-density >= hide-cover-threshold
+    ]
+    / count patches
+end
+
+to-report cover-availability-percent
+  report 100 * cover-availability
+end
+
+;; Standard deviation indicates environmental heterogeneity.
+;;
+;; Low variation means cover is relatively uniform.
+;; High variation means cover is concentrated unevenly.
+to-report cover-variation
+  if count patches <= 1 [
+    report 0
+  ]
+
+  report standard-deviation [cover-density] of patches
+end
+
+;; Mean distance from every patch to the nearest usable hiding patch.
+;;
+;; A result of -1 means that no patch meets hide-cover-threshold.
+to-report mean-distance-to-usable-cover
+  let usable-cover
+    patches with [
+      cover-density >= hide-cover-threshold
+    ]
+
+  if not any? usable-cover [
+    report -1
+  ]
+
+  report mean [
+    distance
+      min-one-of usable-cover [
+        distance myself
+      ]
+  ] of patches
+end
+
+;; ====================================================================
+;; DECISION REPORTERS
+;; ====================================================================
+
+to-report total-decisions
+  report
+    hide-decisions
+    + flee-decisions
+    + still-decisions
+    + seek-cover-decisions
+end
+
+to-report hide-decision-proportion
+  if total-decisions <= 0 [
+    report 0
+  ]
+
+  report hide-decisions / total-decisions
+end
+
+to-report flee-decision-proportion
+  if total-decisions <= 0 [
+    report 0
+  ]
+
+  report flee-decisions / total-decisions
+end
+
+to-report still-decision-proportion
+  if total-decisions <= 0 [
+    report 0
+  ]
+
+  report still-decisions / total-decisions
+end
+
+to-report seek-cover-decision-proportion
+  if total-decisions <= 0 [
+    report 0
+  ]
+
+  report seek-cover-decisions / total-decisions
+end
+
+;; ====================================================================
+;; CURRENT-STATE REPORTERS
+;; ====================================================================
+
 to-report hidden-octopus-count
   report count octopuses with [
     is-hidden?
@@ -739,6 +1525,12 @@ end
 to-report moving-octopus-count
   report count octopuses with [
     is-moving?
+  ]
+end
+
+to-report reacting-octopus-count
+  report count octopuses with [
+    is-reacting?
   ]
 end
 
@@ -766,16 +1558,29 @@ to-report seek-cover-strategy-count
   ]
 end
 
+;; Ratio above 1 means the predator is faster than the prey.
+;; Ratio below 1 means the prey is faster than the predator.
+to-report predator-prey-speed-ratio
+  if prey-speed-setting <= 0 [
+    report 0
+  ]
+
+  report
+    predator-speed-setting
+    / prey-speed-setting
+end
+
 ;; ====================================================================
 ;; LIVE PLOTTING
 ;; ====================================================================
 
 to safely-update-live-plots
-  ;; Prevents an error if the plot has not been created yet.
+  ;; Allows the model to run before the optional plot and pens have
+  ;; been created in the Interface.
   carefully [
     update-live-plots
   ] [
-    ;; Intentionally do nothing when the plot or pens are missing.
+    ;; Intentionally do nothing when plots or pens are unavailable.
   ]
 end
 

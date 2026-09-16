@@ -29,9 +29,10 @@ The visual animation helps explain the model, but the main contribution is the c
 8. [Detection model](#detection-model)
 9. [Reaction delay](#reaction-delay)
 10. [Capture rule](#capture-rule)
-11. [Model parameters](#model-parameters)
-12. [Metrics](#metrics)
-13. [Running the model](#running-the-model)
+11. [Reproduction](#reproduction)
+12. [Model parameters](#model-parameters)
+13. [Metrics](#metrics)
+14. [Running the model](#running-the-model)
 14. [Recommended Interface controls](#recommended-interface-controls)
 15. [Experimental design](#experimental-design)
 16. [BehaviorSpace configuration](#behaviorspace-configuration)
@@ -772,7 +773,21 @@ When capture occurs:
 
 ---
 
-# Model parameters
+# Reproduction
+
+Without recruitment the only possible long-run outcome is extinction, so strategy differences can only ever appear as *time-to-extinction*. Optional sexual reproduction closes the population loop: the system can reach a dynamic equilibrium between predation and births, and strategy differences become visible as sustained population levels.
+
+Reproduction is controlled by `enable-reproduction?`. When it is `false`, the model behaves exactly like earlier baseline versions.
+
+## Per-prey state
+
+Each octopus tracks:
+
+- `sex`, either `\"female\"` or `\"male\"`, assigned at birth with equal probability;
+- `age`, incremented by one every tick the prey is alive;
+- `repro-cooldown`, a per-female timer preventing back-to-back births.
+
+Founders created at `setup` are initialised as adults (`age = maturity-age`) so the population is fertile from tick 0.\n\n## Mating rule\n\nEvery tick, after selecting and performing its action, each prey calls `try-reproduce`. A birth occurs when **all** of the following are true:\n\n- `enable-reproduction?` is `true`;\n- the prey is female;\n- `age >= maturity-age`;\n- `repro-cooldown = 0`;\n- world population is below `carrying-capacity`;\n- the prey is not currently reacting to a threat;\n- the prey's active strategy is not `\"flee\"`;\n- at least one mature male exists within `mating-radius`.\n\nThe biological interpretation is that prey do not attempt to breed while under active predation pressure and that a nearby mate is required.\n\n## Offspring\n\nOn a successful mating, the mother `hatch`es `offspring-per-birth` offspring. NetLogo's `hatch` copies the parent's turtle state, which means each offspring inherits the parent's fixed `policy` (`\"hide\"`, `\"flee\"`, `\"still\"`, `\"seek-cover\"`, or `\"adaptive-dmas\"`).\n\nThe offspring's transient state is then reset:\n\n- `age` is set to `0`;\n- `repro-cooldown` is set to `reproduction-cooldown-setting`, so newborns cannot immediately breed;\n- `sex` is re-randomised;\n- `is-hidden?`, `is-moving?`, `is-reacting?`, and `active-strategy` are cleared;\n- movement speed and reaction timer are set to the current global settings.\n\nThe mother's `repro-cooldown` is then reset to `reproduction-cooldown-setting` and `total-births` is incremented.\n\n## Selection pressure\n\nBecause offspring inherit `policy`, running with `octopus-strategy-mode = \"experimental-assigned\"` now produces genuine selection over the strategy mix: policies whose bearers reach maturity and reproduce become more common, while policies whose bearers are captured young decline. The strategy composition of the population is therefore an emergent outcome rather than a fixed input.\n\nThis does **not** replace controlled single-strategy baselines. It complements them: baselines quantify how each policy performs in isolation, while `\"experimental-assigned\"` with reproduction shows which policies survive when they must compete for a place in the next generation.\n\n---\n\n# Model parameters
 
 ## Population parameters
 
@@ -826,6 +841,17 @@ When capture occurs:
 | `cover-arrangement` | `"patchy"` | Selected spatial cover arrangement |
 | `reef-cluster-count` | `15` | Number of cover cluster centers |
 | `reef-cluster-radius` | `3` | Radius of each cover cluster |
+
+## Reproduction parameters
+
+| Parameter | Default | Description |
+|---|---:|---|
+| `enable-reproduction?` | `true` | Enables sexual reproduction of prey |
+| `maturity-age` | `60` | Ticks of life before a prey can breed |
+| `reproduction-cooldown-setting` | `120` | Ticks a female must wait after a successful birth |
+| `mating-radius` | `2` | Distance within which a female searches for a mate |
+| `offspring-per-birth` | `1` | Number of offspring hatched per successful mating |
+| `carrying-capacity` | `250` | Maximum living prey population; suppresses new births above this level |
 
 ## Experiment parameters
 
@@ -1129,6 +1155,36 @@ cover-density >= hide-cover-threshold
 A result of `-1` means no patch qualifies as usable cover.
 
 This metric measures the accessibility of hiding habitat.
+
+## Reproduction metrics
+
+Available when `enable-reproduction?` is `true`.
+
+```netlogo
+total-births
+```
+
+Total offspring hatched during the run.
+
+```netlogo
+female-count
+male-count
+adult-count
+```
+
+Current counts of females, males, and mature prey (`age >= maturity-age`).
+
+```netlogo
+net-population-change
+```
+
+Reports `total-births - total-captures`. A positive value means recruitment has exceeded predation over the run; a negative value means the population is being driven down.
+
+```netlogo
+births-per-capture
+```
+
+Reports `total-births / total-captures`. A value of `-1` means no captures have occurred, so the ratio is undefined. Values above `1` indicate the population is replacing itself faster than it is being predated.
 
 ## Predator/prey speed ratio
 
@@ -2084,14 +2140,17 @@ It does not simulate the future trajectories of both agents before making the de
 
 Movement, hiding, searching, and waiting have no explicit energy cost.
 
-## No reproduction or evolution
+## Reproduction is present but simplified
 
-The model evaluates survival during a run. It does not simulate:
+The model now supports optional sexual reproduction (see the [Reproduction](#reproduction) section). It is deliberately simple and does not simulate:
 
-- reproduction;
-- inheritance;
-- evolution;
-- long-term population adaptation.
+- gamete-level genetics or recombination;
+- age-dependent fertility beyond a maturity threshold;
+- individual mate choice beyond proximity and sex;
+- energy or condition costs of breeding;
+- true evolutionary mutation of strategy parameters.
+
+Offspring inherit the parent's fixed `policy` field via `hatch`, which provides selection pressure across policies in `"experimental-assigned"` runs, but the scoring rules themselves do not mutate. Reproduction can be disabled with `enable-reproduction? = false` to recover the pure-decay baseline.
 
 ## Shared parameter values
 
@@ -2178,7 +2237,9 @@ The improved research prototype includes:
 - current strategy counts;
 - optional predator perception rings;
 - optional state labels;
-- safe live plotting when the expected plot is present.
+- safe live plotting when the expected plot is present;
+- optional sexual reproduction with maturity, cooldown, and carrying capacity;
+- policy inheritance so mixed-strategy runs carry selection pressure.
 
 ---
 

@@ -83,6 +83,22 @@ globals [
   octopus-strategy-mode
 
   ;; ------------------------------------------------------------
+  ;; Reproduction settings
+  ;;
+  ;; Reproduction closes the population loop: without it, the only
+  ;; long-run outcome is extinction. Births let the system reach a
+  ;; dynamic equilibrium between predation and recruitment, so
+  ;; strategy differences show up as sustained population levels
+  ;; rather than only as time-to-extinction.
+  ;; ------------------------------------------------------------
+  enable-reproduction?
+  maturity-age
+  reproduction-cooldown-setting
+  mating-radius
+  offspring-per-birth
+  carrying-capacity
+
+  ;; ------------------------------------------------------------
   ;; Experiment settings
   ;; ------------------------------------------------------------
   experiment-duration
@@ -125,6 +141,11 @@ globals [
   capture-ticks
   first-capture-tick
   last-capture-tick
+
+  ;; ------------------------------------------------------------
+  ;; Reproduction analytics
+  ;; ------------------------------------------------------------
+  total-births
 ]
 
 patches-own [
@@ -155,6 +176,11 @@ octopuses-own [
 
   ;; Individual movement speed.
   prey-speed
+
+  ;; Reproduction state.
+  sex
+  age
+  repro-cooldown
 ]
 
 predators-own [
@@ -215,6 +241,14 @@ to set-default-parameters
 
   ;; Strategy
   set octopus-strategy-mode "adaptive-dmas"
+
+  ;; Reproduction
+  set enable-reproduction? true
+  set maturity-age 60
+  set reproduction-cooldown-setting 120
+  set mating-radius 2
+  set offspring-per-birth 1
+  set carrying-capacity 250
 
   ;; Experiment
   set experiment-duration 500
@@ -340,6 +374,26 @@ to validate-parameters
     set experiment-duration 500
   ]
 
+  if maturity-age < 0 [
+    set maturity-age 60
+  ]
+
+  if reproduction-cooldown-setting < 0 [
+    set reproduction-cooldown-setting 120
+  ]
+
+  if mating-radius <= 0 [
+    set mating-radius 2
+  ]
+
+  if offspring-per-birth < 1 [
+    set offspring-per-birth 1
+  ]
+
+  if carrying-capacity < 0 [
+    set carrying-capacity 250
+  ]
+
   ;; NetLogo random-seed expects an integer.
   set experiment-seed round experiment-seed
 end
@@ -390,6 +444,8 @@ to reset-analytics
   set capture-ticks []
   set first-capture-tick -1
   set last-capture-tick -1
+
+  set total-births 0
 end
 
 ;; ====================================================================
@@ -579,6 +635,15 @@ to setup-octopuses
     set active-strategy "still"
     set last-counted-strategy ""
 
+    ;; Founders are adults ready to breed immediately.
+    ifelse random 2 = 0 [
+      set sex "female"
+    ] [
+      set sex "male"
+    ]
+    set age maturity-age
+    set repro-cooldown 0
+
     ifelse octopus-strategy-mode = "experimental-assigned" [
       set policy one-of
         ["hide" "flee" "still" "seek-cover"]
@@ -691,6 +756,8 @@ to execute-prey-logic
   ;; Count only transitions into a new strategy.
   record-strategy-transition
   update-octopus-visuals
+
+  try-reproduce
 end
 
 to-report nearest-predator
@@ -984,6 +1051,95 @@ to safe-forward [step-size]
       fd step-size
     ]
   ]
+end
+
+;; ====================================================================
+;; REPRODUCTION
+;;
+;; Sexual reproduction closes the population loop so that survival
+;; differences between strategies are visible as steady-state
+;; population levels rather than only as time-to-extinction.
+;;
+;; Offspring inherit the parent's policy. In experimental-assigned
+;; runs this produces selection pressure over the policy mix: policies
+;; that survive long enough to breed become more common, so the
+;; strategy mix itself becomes an emergent outcome.
+;; ====================================================================
+
+to try-reproduce
+  if not enable-reproduction? [
+    stop
+  ]
+
+  ;; Age and cooldown advance regardless of the reproduction attempt.
+  set age age + 1
+
+  if repro-cooldown > 0 [
+    set repro-cooldown repro-cooldown - 1
+  ]
+
+  ;; Prey busy escaping a predator do not attempt to breed.
+  if is-reacting? [
+    stop
+  ]
+
+  if active-strategy = "flee" [
+    stop
+  ]
+
+  if sex != "female" [
+    stop
+  ]
+
+  if age < maturity-age [
+    stop
+  ]
+
+  if repro-cooldown > 0 [
+    stop
+  ]
+
+  if count octopuses >= carrying-capacity [
+    stop
+  ]
+
+  let mate one-of other octopuses in-radius mating-radius with [
+    sex = "male" and age >= maturity-age
+  ]
+
+  if mate = nobody [
+    stop
+  ]
+
+  hatch offspring-per-birth [
+    set age 0
+    set repro-cooldown reproduction-cooldown-setting
+
+    ifelse random 2 = 0 [
+      set sex "female"
+    ] [
+      set sex "male"
+    ]
+
+    ;; Reset transient state; policy is inherited from the parent
+    ;; via hatch, which is what drives selection pressure across
+    ;; generations in mixed-policy runs.
+    set prey-speed prey-speed-setting
+    set reaction-timer prey-reaction-time-setting
+    set is-reacting? false
+    set is-hidden? false
+    set is-moving? false
+    set active-strategy "still"
+    set last-counted-strategy ""
+
+    rt random 360
+    fd 0.3
+
+    update-octopus-visuals
+  ]
+
+  set repro-cooldown reproduction-cooldown-setting
+  set total-births total-births + offspring-per-birth
 end
 
 ;; ====================================================================
@@ -1556,6 +1712,34 @@ to-report seek-cover-strategy-count
   report count octopuses with [
     active-strategy = "seek-cover"
   ]
+end
+
+;; ====================================================================
+;; POPULATION AND REPRODUCTION REPORTERS
+;; ====================================================================
+
+to-report female-count
+  report count octopuses with [sex = "female"]
+end
+
+to-report male-count
+  report count octopuses with [sex = "male"]
+end
+
+to-report adult-count
+  report count octopuses with [age >= maturity-age]
+end
+
+to-report births-per-capture
+  if total-captures <= 0 [
+    report -1
+  ]
+
+  report total-births / total-captures
+end
+
+to-report net-population-change
+  report total-births - total-captures
 end
 
 ;; Ratio above 1 means the predator is faster than the prey.

@@ -12,86 +12,23 @@
 
 globals [
   ;; ------------------------------------------------------------
-  ;; Population settings
+  ;; MODEL CONSTANTS
+  ;;
+  ;; These are parameters no experiment varies. They are set once in
+  ;; set-model-constants rather than given Interface widgets, because a
+  ;; slider that every experiment pins to the same value is surface
+  ;; area with no purpose. Any of them can be promoted back to a
+  ;; slider in one step if it becomes a variable of interest.
   ;; ------------------------------------------------------------
-  initial-octopuses
-  initial-predators
-
-  ;; ------------------------------------------------------------
-  ;; Movement and detection settings
-  ;; ------------------------------------------------------------
-  predator-detection-radius-setting
-  predator-speed-setting
-  prey-speed-setting
-  prey-reaction-time-setting
   capture-distance
-
-  ;; ------------------------------------------------------------
-  ;; Predator search settings
-  ;; ------------------------------------------------------------
   predator-wander-angle
   predator-search-speed-factor
-
-  ;; ------------------------------------------------------------
-  ;; Adaptive decision settings
-  ;; ------------------------------------------------------------
   threat-awareness-radius
-  hide-cover-threshold
   critical-threat-distance
   seek-cover-radius
-  minimum-cover-target
   minimum-cover-improvement
-  minimum-decision-score
-
-  ;; ------------------------------------------------------------
-  ;; Detection equation settings
-  ;; ------------------------------------------------------------
-  cover-impact-strength
-  hide-detection-multiplier
-  motion-detection-multiplier
-
-  ;; ------------------------------------------------------------
-  ;; Environment settings
-  ;;
-  ;; cover-amount-category:
-  ;;   "low"    -> target mean cover 0.15
-  ;;   "medium" -> target mean cover 0.45
-  ;;   "high"   -> target mean cover 0.75
-  ;;
-  ;; cover-arrangement:
-  ;;   "uniform"
-  ;;   "patchy"
-  ;;   "mixed"
-  ;; ------------------------------------------------------------
-  cover-amount-category
-  cover-arrangement
   reef-cluster-count
   reef-cluster-radius
-  target-cover-mean
-  realized-cover-mean
-
-  ;; ------------------------------------------------------------
-  ;; Strategy settings
-  ;;
-  ;; "adaptive-dmas"
-  ;; "hide"
-  ;; "flee"
-  ;; "still"
-  ;; "seek-cover"
-  ;; "experimental-assigned"
-  ;; ------------------------------------------------------------
-  octopus-strategy-mode
-
-  ;; ------------------------------------------------------------
-  ;; Reproduction settings
-  ;;
-  ;; Reproduction closes the population loop: without it, the only
-  ;; long-run outcome is extinction. Births let the system reach a
-  ;; dynamic equilibrium between predation and recruitment, so
-  ;; strategy differences show up as sustained population levels
-  ;; rather than only as time-to-extinction.
-  ;; ------------------------------------------------------------
-  enable-reproduction?
   maturity-age
   reproduction-cooldown-setting
   mating-radius
@@ -99,16 +36,21 @@ globals [
   carrying-capacity
 
   ;; ------------------------------------------------------------
-  ;; Experiment settings
+  ;; NOTE ON REMAINING PARAMETERS
+  ;;
+  ;; All experimental parameters are now Interface widgets
+  ;; (sliders, choosers, switches) and are therefore global
+  ;; variables created by the Interface rather than declared here.
+  ;; Declaring them here as well would be a duplicate definition.
+  ;;
+  ;; Only derived values and analytics are declared below.
   ;; ------------------------------------------------------------
-  experiment-duration
-  experiment-seed
 
   ;; ------------------------------------------------------------
-  ;; Display settings
+  ;; Derived environment values
   ;; ------------------------------------------------------------
-  show-predator-radii?
-  show-state-labels?
+  target-cover-mean
+  realized-cover-mean
 
   ;; ------------------------------------------------------------
   ;; Population analytics
@@ -116,6 +58,8 @@ globals [
   starting-octopus-count
   total-captures
   cumulative-survival
+  founder-cumulative-survival
+  extinction-tick
 
   ;; ------------------------------------------------------------
   ;; Predator analytics
@@ -136,6 +80,19 @@ globals [
   seek-cover-decisions
 
   ;; ------------------------------------------------------------
+  ;; Strategy exposure analytics
+  ;;
+  ;; Decision counts measure how often a strategy was CHOSEN.
+  ;; Exposure measures how many agent-ticks were SPENT in it, which
+  ;; is the quantity that actually determines detection risk.
+  ;; ------------------------------------------------------------
+  hide-agent-ticks
+  flee-agent-ticks
+  still-agent-ticks
+  seek-cover-agent-ticks
+  reacting-agent-ticks
+
+  ;; ------------------------------------------------------------
   ;; Capture-time analytics
   ;; ------------------------------------------------------------
   capture-ticks
@@ -146,6 +103,15 @@ globals [
   ;; Reproduction analytics
   ;; ------------------------------------------------------------
   total-births
+
+  ;; ------------------------------------------------------------
+  ;; Render and plot guards
+  ;;
+  ;; These keep headless BehaviorSpace runs from paying for drawing
+  ;; and plotting work that has no visible effect.
+  ;; ------------------------------------------------------------
+  rings-drawn?
+  plot-updates-unavailable?
 ]
 
 patches-own [
@@ -181,6 +147,14 @@ octopuses-own [
   sex
   age
   repro-cooldown
+
+  ;; True for the octopuses created by setup. Founders let survival
+  ;; be measured cleanly even when reproduction is enabled, because
+  ;; the founder cohort is a fixed denominator.
+  is-founder?
+
+  ;; Ticks this octopus has been alive in the run.
+  ticks-alive
 ]
 
 predators-own [
@@ -190,80 +164,50 @@ predators-own [
 ]
 
 ;; ====================================================================
-;; INITIAL DEFAULTS
-;; ====================================================================
-
-;; startup runs when the model is first opened.
+;; PARAMETERS
 ;;
-;; Defaults are deliberately not reset by setup. This allows Interface
-;; controls and BehaviorSpace to change parameters before setup runs.
-to startup
-  set-default-parameters
-end
-
-to set-default-parameters
-  ;; Population
-  set initial-octopuses 40
-  set initial-predators 3
-
-  ;; Movement and detection
-  set predator-detection-radius-setting 10
-  set predator-speed-setting 0.8
-  set prey-speed-setting 0.6
-  set prey-reaction-time-setting 2
-  set capture-distance 0.5
-
-  ;; Predator searching
-  set predator-wander-angle 15
-  set predator-search-speed-factor 0.5
-
-  ;; Adaptive decision model
-  set threat-awareness-radius 10
-  set hide-cover-threshold 0.55
-  set critical-threat-distance 3
-  set seek-cover-radius 5
-  set minimum-cover-target 0.60
-  set minimum-cover-improvement 0.10
-  set minimum-decision-score 0.08
-
-  ;; Detection model
-  set cover-impact-strength 0.8
-  set hide-detection-multiplier 0.15
-  set motion-detection-multiplier 1.5
-
-  ;; Environment
-  set cover-amount-category "medium"
-  set cover-arrangement "patchy"
-  set reef-cluster-count 15
-  set reef-cluster-radius 3
-  set target-cover-mean 0.45
-  set realized-cover-mean 0
-
-  ;; Strategy
-  set octopus-strategy-mode "adaptive-dmas"
-
-  ;; Reproduction
-  set enable-reproduction? true
-  set maturity-age 60
-  set reproduction-cooldown-setting 120
-  set mating-radius 2
-  set offspring-per-birth 1
-  set carrying-capacity 250
-
-  ;; Experiment
-  set experiment-duration 500
-  set experiment-seed 1
-
-  ;; Display
-  set show-predator-radii? true
-  set show-state-labels? true
-end
+;; Every experimental parameter is an Interface widget. Widget
+;; defaults are stored in the model file, so no startup procedure is
+;; needed, and none is provided on purpose: a startup procedure that
+;; re-applied hard-coded defaults would discard Interface settings
+;; every time the model was opened.
+;;
+;; validate-parameters below is a safety net only. It repairs values
+;; that are impossible rather than values that are merely unusual, so
+;; BehaviorSpace remains free to explore the full parameter space.
+;; ====================================================================
 
 ;; Ensures that setup remains safe if the model is imported, or if an
 ;; Interface control supplies an invalid value.
 ;;
 ;; Valid values already supplied by BehaviorSpace or Interface widgets
 ;; are preserved.
+to set-model-constants
+  ;; Movement and capture
+  set capture-distance 0.5
+  set predator-wander-angle 15
+  set predator-search-speed-factor 0.5
+
+  ;; Prey perception and adaptive decision model
+  set threat-awareness-radius 10
+  set critical-threat-distance 3
+  set seek-cover-radius 5
+  set minimum-cover-improvement 0.10
+
+  ;; Environment shape. Cover AMOUNT is a widget; these control the
+  ;; spatial pattern, which the normalisation step then rescales to the
+  ;; target mean, so they do not affect how much cover exists.
+  set reef-cluster-count 15
+  set reef-cluster-radius 3
+
+  ;; Reproduction
+  set maturity-age 60
+  set reproduction-cooldown-setting 120
+  set mating-radius 2
+  set offspring-per-birth 1
+  set carrying-capacity 250
+end
+
 to validate-parameters
   if initial-octopuses < 1 [
     set initial-octopuses 40
@@ -403,6 +347,7 @@ end
 ;; ====================================================================
 
 to setup
+  set-model-constants
   validate-parameters
 
   ;; Do not use clear-all here because clear-all would reset parameters
@@ -430,6 +375,16 @@ end
 
 to reset-analytics
   set starting-octopus-count 0
+  set founder-cumulative-survival 0
+  set extinction-tick -1
+  set rings-drawn? false
+  set plot-updates-unavailable? false
+
+  set hide-agent-ticks 0
+  set flee-agent-ticks 0
+  set still-agent-ticks 0
+  set seek-cover-agent-ticks 0
+  set reacting-agent-ticks 0
   set total-captures 0
   set cumulative-survival 0
 
@@ -635,6 +590,9 @@ to setup-octopuses
     set active-strategy "still"
     set last-counted-strategy ""
 
+    set is-founder? true
+    set ticks-alive 0
+
     ;; Founders are adults ready to breed immediately.
     ifelse random 2 = 0 [
       set sex "female"
@@ -697,6 +655,18 @@ to go
   set cumulative-survival
     cumulative-survival + count octopuses
 
+  ;; The founder cohort is a fixed denominator, so founder-ticks stay
+  ;; interpretable as survival even when reproduction is enabled.
+  set founder-cumulative-survival
+    founder-cumulative-survival
+    + count octopuses with [is-founder?]
+
+  if not any? octopuses [
+    if extinction-tick = -1 [
+      set extinction-tick ticks
+    ]
+  ]
+
   tick
 
   render-predator-perception
@@ -714,6 +684,8 @@ end
 ;; ====================================================================
 
 to execute-prey-logic
+  advance-life-clock
+
   let nearest-threat nearest-predator
 
   select-active-strategy nearest-threat
@@ -727,6 +699,8 @@ to execute-prey-logic
       set is-reacting? true
       set is-hidden? false
       set is-moving? false
+
+      set reacting-agent-ticks reacting-agent-ticks + 1
 
       update-octopus-visuals
       stop
@@ -755,9 +729,48 @@ to execute-prey-logic
 
   ;; Count only transitions into a new strategy.
   record-strategy-transition
+
+  ;; Count every tick spent in the strategy. Detection risk accrues
+  ;; per tick, not per decision, so exposure is the quantity that
+  ;; links behaviour to outcome.
+  record-strategy-exposure
+
   update-octopus-visuals
 
   try-reproduce
+end
+
+;; Ageing and cooldown advance once per tick for every living prey,
+;; independently of whether it acts this tick.
+to advance-life-clock
+  set ticks-alive ticks-alive + 1
+  set age age + 1
+
+  if repro-cooldown > 0 [
+    set repro-cooldown repro-cooldown - 1
+  ]
+end
+
+to record-strategy-exposure
+  if active-strategy = "hide" [
+    set hide-agent-ticks hide-agent-ticks + 1
+    stop
+  ]
+
+  if active-strategy = "flee" [
+    set flee-agent-ticks flee-agent-ticks + 1
+    stop
+  ]
+
+  if active-strategy = "still" [
+    set still-agent-ticks still-agent-ticks + 1
+    stop
+  ]
+
+  if active-strategy = "seek-cover" [
+    set seek-cover-agent-ticks
+      seek-cover-agent-ticks + 1
+  ]
 end
 
 to-report nearest-predator
@@ -1071,20 +1084,32 @@ to try-reproduce
     stop
   ]
 
-  ;; Age and cooldown advance regardless of the reproduction attempt.
-  set age age + 1
+  ;; Ageing and cooldown are handled by advance-life-clock so that
+  ;; they apply on every tick, including ticks spent reacting.
 
-  if repro-cooldown > 0 [
-    set repro-cooldown repro-cooldown - 1
-  ]
-
-  ;; Prey busy escaping a predator do not attempt to breed.
+  ;; Prey that are currently dealing with a predator do not breed.
+  ;;
+  ;; This condition is expressed in terms of the threat situation, not
+  ;; the strategy label, and that distinction matters. An earlier
+  ;; version skipped reproduction whenever active-strategy was "flee".
+  ;; For an adaptive prey, which flees only occasionally, that was a
+  ;; reasonable "too busy escaping" rule. For the fixed flee policy it
+  ;; was fatal: such a prey has active-strategy = "flee" on every tick
+  ;; of its life, so it could never breed at all. The flee policy was
+  ;; structurally sterile, and every reproduction-enabled comparison
+  ;; against it measured that sterility rather than its survival.
+  ;;
+  ;; The rule below applies identically to every policy.
   if is-reacting? [
     stop
   ]
 
-  if active-strategy = "flee" [
-    stop
+  let visible-threat nearest-predator
+
+  if visible-threat != nobody [
+    if distance visible-threat <= threat-awareness-radius [
+      stop
+    ]
   ]
 
   if sex != "female" [
@@ -1114,6 +1139,8 @@ to try-reproduce
   hatch offspring-per-birth [
     set age 0
     set repro-cooldown reproduction-cooldown-setting
+    set is-founder? false
+    set ticks-alive 0
 
     ifelse random 2 = 0 [
       set sex "female"
@@ -1396,11 +1423,18 @@ end
 ;; ====================================================================
 
 to render-predator-perception
-  clear-drawing
-
+  ;; The drawing layer is only touched when rings are actually shown,
+  ;; or once more to erase them after the switch is turned off. This
+  ;; keeps headless experiment runs free of per-tick drawing cost.
   if not show-predator-radii? [
+    if rings-drawn? [
+      clear-drawing
+      set rings-drawn? false
+    ]
     stop
   ]
+
+  clear-drawing
 
   ask predators [
     ;; Red shows the predator's unmodified detection radius.
@@ -1413,6 +1447,8 @@ to render-predator-perception
       reference-detection-radius
       cyan
   ]
+
+  set rings-drawn? true
 end
 
 to-report reference-detection-radius
@@ -1755,16 +1791,383 @@ to-report predator-prey-speed-ratio
 end
 
 ;; ====================================================================
+;; POLICY COMPOSITION REPORTER
+;;
+;; Relevant to "experimental-assigned" runs, where each founder gets a
+;; random fixed policy and offspring inherit it, so the policy mix is
+;; an outcome rather than a setting.
+;; ====================================================================
+
+to-report policy-count [wanted-policy]
+  report count octopuses with [
+    policy = wanted-policy
+  ]
+end
+
+;; ====================================================================
+;; FOUNDER COHORT REPORTERS
+;;
+;; survival-rate divides the current population by the starting
+;; population. With reproduction enabled that ratio mixes survival
+;; with recruitment and can exceed 100, so it is a population index
+;; rather than a survival measure.
+;;
+;; The founder cohort is fixed at setup and never grows, so founder
+;; reporters remain true survival measures under every setting.
+;; ====================================================================
+
+to-report founders-alive
+  report count octopuses with [is-founder?]
+end
+
+to-report founder-survival-rate
+  if starting-octopus-count <= 0 [
+    report 0
+  ]
+
+  report
+    100
+    * founders-alive
+    / starting-octopus-count
+end
+
+to-report mean-founder-survival-time
+  if starting-octopus-count <= 0 [
+    report 0
+  ]
+
+  report
+    founder-cumulative-survival
+    / starting-octopus-count
+end
+
+;; Mean age of the living founders, useful as a check that the life
+;; clock advances once per tick for every agent.
+to-report mean-founder-age
+  let founders octopuses with [is-founder?]
+
+  if not any? founders [
+    report -1
+  ]
+
+  report mean [ticks-alive] of founders
+end
+
+;; ====================================================================
+;; STRATEGY EXPOSURE REPORTERS
+;;
+;; Decision counts answer "how often was this chosen?".
+;; Exposure answers "how much of the run was spent doing it?", which
+;; is what actually determines cumulative detection risk.
+;; ====================================================================
+
+to-report total-agent-ticks
+  report
+    hide-agent-ticks
+    + flee-agent-ticks
+    + still-agent-ticks
+    + seek-cover-agent-ticks
+end
+
+to-report hide-exposure-proportion
+  if total-agent-ticks <= 0 [
+    report 0
+  ]
+
+  report hide-agent-ticks / total-agent-ticks
+end
+
+to-report flee-exposure-proportion
+  if total-agent-ticks <= 0 [
+    report 0
+  ]
+
+  report flee-agent-ticks / total-agent-ticks
+end
+
+to-report still-exposure-proportion
+  if total-agent-ticks <= 0 [
+    report 0
+  ]
+
+  report still-agent-ticks / total-agent-ticks
+end
+
+to-report seek-cover-exposure-proportion
+  if total-agent-ticks <= 0 [
+    report 0
+  ]
+
+  report seek-cover-agent-ticks / total-agent-ticks
+end
+
+;; Shannon evenness of the exposure mix, on a 0..1 scale.
+;;
+;; 0 means the population spent the whole run in a single strategy.
+;; 1 means time was divided equally across all four strategies.
+;;
+;; This is the summary statistic for "did the adaptive policy actually
+;; behave adaptively, or did it collapse onto one fixed action?".
+to-report strategy-evenness
+  if total-agent-ticks <= 0 [
+    report 0
+  ]
+
+  let shares
+    (list
+      hide-exposure-proportion
+      flee-exposure-proportion
+      still-exposure-proportion
+      seek-cover-exposure-proportion)
+
+  let positive-shares
+    filter [a-share -> a-share > 0] shares
+
+  if length positive-shares <= 1 [
+    report 0
+  ]
+
+  let entropy
+    sum map [
+      a-share -> (- a-share) * ln a-share
+    ] positive-shares
+
+  report entropy / ln 4
+end
+
+;; ====================================================================
+;; RUN OUTCOME REPORTERS
+;; ====================================================================
+
+;; Tick at which the population reached zero, or -1 if prey survived
+;; to the end of the run. Right-censored runs report -1, which is the
+;; convention survival analysis expects.
+to-report extinction-time
+  report extinction-tick
+end
+
+to-report population-extinct?
+  report not any? octopuses
+end
+
+to-report final-tick
+  report ticks
+end
+
+;; True when the run ended because time expired rather than because
+;; the population died out. Survival analysis needs this flag to
+;; handle censoring correctly.
+to-report run-censored?
+  report any? octopuses
+end
+
+;; ====================================================================
+;; SELF TEST
+;;
+;; Automated invariant checks, runnable headless via the "self-test"
+;; BehaviorSpace experiment. Each check guards a property the study
+;; depends on, and two of them are regression tests for defects this
+;; model actually had.
+;; ====================================================================
+
+to run-self-test
+  let failures 0
+
+  output-print "=== octoplus self test ==="
+
+  ;; ---- 1. Environment normalisation ----------------------------
+  ;; Cover amount and cover arrangement are only separable
+  ;; experimental variables if every combination lands on its target
+  ;; mean. Without this, a null result on arrangement means nothing.
+  foreach ["low" "medium" "high"] [ a-category ->
+    foreach ["uniform" "patchy" "mixed"] [ an-arrangement ->
+      set cover-amount-category a-category
+      set cover-arrangement an-arrangement
+      setup
+
+      let deviation
+        abs (realized-cover-mean - cover-target-for-category)
+
+      set failures
+        failures
+        + check
+            (word "cover mean " a-category "/" an-arrangement)
+            (deviation <= 0.02)
+            (word "off by " (precision deviation 4))
+    ]
+  ]
+
+  ;; ---- 2. Reporter bounds --------------------------------------
+  set cover-amount-category "medium"
+  set cover-arrangement "patchy"
+  setup
+  repeat 50 [ go ]
+
+  set failures failures + check "proportions sum to 1"
+    ((abs (hide-exposure-proportion
+           + flee-exposure-proportion
+           + still-exposure-proportion
+           + seek-cover-exposure-proportion - 1) < 0.00000001
+      or total-agent-ticks = 0)
+     and (abs (hide-decision-proportion
+               + flee-decision-proportion
+               + still-decision-proportion
+               + seek-cover-decision-proportion - 1) < 0.00000001
+          or total-decisions = 0)) ""
+
+  set failures failures + check "rates and cover within bounds"
+    (founder-survival-rate >= 0
+     and founder-survival-rate <= 100
+     and strategy-evenness >= 0
+     and strategy-evenness <= 1
+     and min [cover-density] of patches >= 0
+     and max [cover-density] of patches <= 1) ""
+
+  ;; ---- 3. The life clock advances once per tick ----------------
+  ;; REGRESSION TEST. Ageing used to live inside try-reproduce, which
+  ;; is skipped while a prey is in its reaction delay, so age counted
+  ;; ticks-not-spent-reacting instead of ticks lived. Maturity then
+  ;; arrived later in dangerous environments than in calm ones.
+  set failures failures + check "life clock = ticks elapsed"
+    (mean-founder-age = ticks or founders-alive = 0)
+    (word "ticks " ticks ", mean founder age " mean-founder-age)
+
+  ;; ---- 4. Population accounting --------------------------------
+  set failures failures + check "prey accounted for"
+    (count octopuses
+      = starting-octopus-count + total-births - total-captures) ""
+
+  ;; ---- 5. No policy is structurally sterile --------------------
+  ;; REGRESSION TEST. The reproduction guard used to read
+  ;; `if active-strategy = "flee" [ stop ]`, which made the fixed flee
+  ;; policy permanently sterile: zero births in 135 runs. That
+  ;; inverted the conclusion of every reproduction-enabled experiment.
+  set failures failures + check "every fixed policy can reproduce"
+    (all-policies-can-reproduce?)
+    "a fixed policy produced no births at all"
+
+  ;; ---- 6. Determinism ------------------------------------------
+  ;; The paired statistical analysis depends on a seed reproducing the
+  ;; same world, so it is asserted rather than assumed.
+  set failures failures + check "same seed reproduces run"
+    (deterministic-replay?) ""
+
+  output-print ""
+  ifelse failures = 0 [
+    output-print "RESULT: PASS"
+  ] [
+    output-print (word "RESULT: FAIL (" failures " checks failed)")
+  ]
+end
+
+;; Runs each fixed policy briefly with reproduction forced on, in a
+;; predator-free world, and reports whether every one of them produced
+;; at least one birth.
+to-report all-policies-can-reproduce?
+  let saved-mode octopus-strategy-mode
+  let saved-predators initial-predators
+  let saved-repro enable-reproduction?
+  let saved-duration experiment-duration
+
+  set initial-predators 0
+  set enable-reproduction? true
+  set experiment-duration 200
+
+  let every-policy-bred? true
+
+  foreach ["hide" "flee" "still" "seek-cover" "adaptive-dmas"] [
+    a-policy ->
+      set octopus-strategy-mode a-policy
+      setup
+      repeat 150 [ go ]
+
+      if total-births <= 0 [
+        set every-policy-bred? false
+        output-print (word "        policy " a-policy
+                           " produced no births")
+      ]
+  ]
+
+  set octopus-strategy-mode saved-mode
+  set initial-predators saved-predators
+  set enable-reproduction? saved-repro
+  set experiment-duration saved-duration
+
+  report every-policy-bred?
+end
+
+;; Runs the same seed twice and compares the resulting state.
+to-report deterministic-replay?
+  let saved-duration experiment-duration
+  set experiment-duration 60
+
+  setup
+  repeat 60 [ go ]
+  let first-signature run-signature
+
+  setup
+  repeat 60 [ go ]
+  let second-signature run-signature
+
+  set experiment-duration saved-duration
+  report first-signature = second-signature
+end
+
+to-report run-signature
+  report (list
+    count octopuses
+    total-captures
+    total-births
+    hide-decisions
+    flee-decisions
+    still-decisions
+    seek-cover-decisions
+    precision cumulative-survival 6
+    precision realized-cover-mean 8
+    precision (sum [xcor + ycor] of turtles) 6)
+end
+
+;; Reports 0 when the condition holds and 1 when it fails, so that
+;; callers can accumulate a failure count.
+to-report check [check-name condition detail]
+  if condition [
+    output-print (word "  ok    " check-name)
+    report 0
+  ]
+
+  let suffix ""
+
+  if detail != "" [
+    set suffix (word "  -- " detail)
+  ]
+
+  output-print (word "  FAIL  " check-name suffix)
+  report 1
+end
+
+;; ====================================================================
 ;; LIVE PLOTTING
 ;; ====================================================================
 
 to safely-update-live-plots
+  ;; Plotting is skipped outright when the switch is off, which is how
+  ;; BehaviorSpace runs avoid paying for plot updates nobody reads.
+  if not update-live-plots? [
+    stop
+  ]
+
   ;; Allows the model to run before the optional plot and pens have
-  ;; been created in the Interface.
+  ;; been created in the Interface. Once plotting is known to be
+  ;; unavailable it is not retried, because `carefully` on every tick
+  ;; is itself a measurable cost over a long run.
+  if plot-updates-unavailable? [
+    stop
+  ]
+
   carefully [
     update-live-plots
   ] [
-    ;; Intentionally do nothing when plots or pens are unavailable.
+    set plot-updates-unavailable? true
   ]
 end
 
@@ -1786,11 +2189,74 @@ to update-live-plots
 
   set-current-plot-pen "Total"
   plotxy ticks count octopuses
-end]]></code>
+
+  set-current-plot "Population and Predation"
+
+  set-current-plot-pen "Prey"
+  plotxy ticks count octopuses
+
+  set-current-plot-pen "Founders"
+  plotxy ticks count octopuses with [is-founder?]
+
+  set-current-plot-pen "Captures"
+  plotxy ticks total-captures
+
+  set-current-plot-pen "Births"
+  plotxy ticks total-births
+
+end
+]]></code>
   <widgets>
-    <view x="180" wrappingAllowedX="true" y="0" frameRate="30.0" minPycor="-25" height="565" showTickCounter="true" patchSize="11.0" fontSize="10" wrappingAllowedY="true" width="565" tickCounterLabel="ticks" maxPycor="25" updateMode="0" maxPxcor="25" minPxcor="-25"></view>
-    <button x="5" y="50" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55">go</button>
-    <button x="5" y="5" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55">setup</button>
+    <button x="5" y="8" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="110" display="setup">setup</button>
+    <button x="120" y="8" height="40" disableUntilTicks="true" forever="true" kind="Observer" width="110" display="go">go</button>
+    <note x="5" y="58" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">EXPERIMENT AND POPULATION</note>
+    <slider x="5" step="1" y="80" max="300" width="230" display="initial-octopuses" height="50" min="1" direction="Horizontal" default="40" variable="initial-octopuses" units="prey"></slider>
+    <slider x="5" step="1" y="132" max="20" width="230" display="initial-predators" height="50" min="0" direction="Horizontal" default="3" variable="initial-predators" units="predators"></slider>
+    <slider x="5" step="50" y="184" max="5000" width="230" display="experiment-duration" height="50" min="50" direction="Horizontal" default="500" variable="experiment-duration" units="ticks"></slider>
+    <slider x="5" step="1" y="236" max="1000" width="230" display="experiment-seed" height="50" min="0" direction="Horizontal" default="1" variable="experiment-seed"></slider>
+    <note x="5" y="294" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">MOVEMENT AND DETECTION</note>
+    <slider x="5" step="0.05" y="316" max="2" width="230" display="prey-speed-setting" height="50" min="0" direction="Horizontal" default="0.6" variable="prey-speed-setting" units="patches/tick"></slider>
+    <slider x="5" step="0.05" y="368" max="2" width="230" display="predator-speed-setting" height="50" min="0" direction="Horizontal" default="0.8" variable="predator-speed-setting" units="patches/tick"></slider>
+    <slider x="5" step="0.5" y="420" max="25" width="230" display="predator-detection-radius-setting" height="50" min="1" direction="Horizontal" default="10" variable="predator-detection-radius-setting" units="patches"></slider>
+    <slider x="5" step="1" y="472" max="20" width="230" display="prey-reaction-time-setting" height="50" min="0" direction="Horizontal" default="2" variable="prey-reaction-time-setting" units="ticks"></slider>
+    <note x="5" y="530" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">DETECTION MODEL</note>
+    <slider x="5" step="0.05" y="552" max="1" width="230" display="cover-impact-strength" height="50" min="0" direction="Horizontal" default="0.8" variable="cover-impact-strength"></slider>
+    <slider x="5" step="0.01" y="604" max="1" width="230" display="hide-detection-multiplier" height="50" min="0" direction="Horizontal" default="0.15" variable="hide-detection-multiplier"></slider>
+    <slider x="5" step="0.1" y="656" max="5" width="230" display="motion-detection-multiplier" height="50" min="0" direction="Horizontal" default="1.5" variable="motion-detection-multiplier"></slider>
+    <note x="240" y="8" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ENVIRONMENT</note>
+    <chooser x="240" y="30" height="60" variable="cover-amount-category" current="1" width="230" display="cover-amount-category"><choice type="string" value="low"></choice><choice type="string" value="medium"></choice><choice type="string" value="high"></choice></chooser>
+    <chooser x="240" y="95" height="60" variable="cover-arrangement" current="1" width="230" display="cover-arrangement"><choice type="string" value="uniform"></choice><choice type="string" value="patchy"></choice><choice type="string" value="mixed"></choice></chooser>
+    <note x="240" y="160" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">PREY STRATEGY</note>
+    <chooser x="240" y="182" height="60" variable="octopus-strategy-mode" current="0" width="230" display="octopus-strategy-mode"><choice type="string" value="adaptive-dmas"></choice><choice type="string" value="hide"></choice><choice type="string" value="flee"></choice><choice type="string" value="still"></choice><choice type="string" value="seek-cover"></choice><choice type="string" value="experimental-assigned"></choice></chooser>
+    <note x="240" y="247" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ADAPTIVE DECISION THRESHOLDS</note>
+    <slider x="240" step="0.01" y="269" max="1" width="230" display="minimum-decision-score" height="50" min="0" direction="Horizontal" default="0.08" variable="minimum-decision-score"></slider>
+    <slider x="240" step="0.01" y="321" max="1" width="230" display="minimum-cover-target" height="50" min="0" direction="Horizontal" default="0.6" variable="minimum-cover-target"></slider>
+    <slider x="240" step="0.01" y="373" max="1" width="230" display="hide-cover-threshold" height="50" min="0" direction="Horizontal" default="0.55" variable="hide-cover-threshold"></slider>
+    <note x="240" y="431" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">REPRODUCTION</note>
+    <switch x="240" y="453" height="40" on="true" variable="enable-reproduction?" width="230" display="enable-reproduction?"></switch>
+    <note x="240" y="500" backgroundDark="0" fontSize="11" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">DISPLAY AND PERFORMANCE</note>
+    <switch x="240" y="522" height="40" on="true" variable="show-predator-radii?" width="230" display="show-predator-radii?"></switch>
+    <switch x="240" y="567" height="40" on="true" variable="show-state-labels?" width="230" display="show-state-labels?"></switch>
+    <switch x="240" y="612" height="40" on="true" variable="update-live-plots?" width="230" display="update-live-plots?"></switch>
+    <note x="240" y="657" backgroundDark="0" fontSize="10" width="230" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">Turn all three off for BehaviorSpace speed.</note>
+    <view x="480" wrappingAllowedX="true" y="8" frameRate="30.0" minPycor="-25" height="565" showTickCounter="true" patchSize="11.0" fontSize="10" wrappingAllowedY="true" width="565" tickCounterLabel="ticks" maxPycor="25" updateMode="1" maxPxcor="25" minPxcor="-25"></view>
+    <note x="1060" y="8" backgroundDark="0" fontSize="11" width="429" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">SURVIVAL OUTCOMES</note>
+    <monitor x="1060" precision="2" y="30" height="60" fontSize="11" width="143" display="founder survival %">founder-survival-rate</monitor>
+    <monitor x="1207" precision="2" y="30" height="60" fontSize="11" width="143" display="capture rate %">capture-rate</monitor>
+    <monitor x="1354" precision="2" y="30" height="60" fontSize="11" width="143" display="prey alive">count octopuses</monitor>
+    <monitor x="1060" precision="0" y="95" height="60" fontSize="11" width="143" display="captures">total-captures</monitor>
+    <monitor x="1207" precision="0" y="95" height="60" fontSize="11" width="143" display="births">total-births</monitor>
+    <monitor x="1354" precision="0" y="95" height="60" fontSize="11" width="143" display="extinct at">extinction-time</monitor>
+    <note x="1060" y="162" backgroundDark="0" fontSize="11" width="429" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ENVIRONMENT REALISED</note>
+    <monitor x="1060" precision="2" y="184" height="60" fontSize="11" width="143" display="mean cover">realized-cover-mean</monitor>
+    <monitor x="1207" precision="2" y="184" height="60" fontSize="11" width="143" display="usable cover %">cover-availability-percent</monitor>
+    <monitor x="1354" precision="2" y="184" height="60" fontSize="11" width="143" display="dist. to cover">mean-distance-to-usable-cover</monitor>
+    <note x="1060" y="251" backgroundDark="0" fontSize="11" width="429" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">BEHAVIOUR: SHARE OF PREY-TICKS SPENT</note>
+    <monitor x="1060" precision="2" y="273" height="60" fontSize="11" width="143" display="hide">hide-exposure-proportion</monitor>
+    <monitor x="1207" precision="2" y="273" height="60" fontSize="11" width="143" display="flee">flee-exposure-proportion</monitor>
+    <monitor x="1354" precision="2" y="273" height="60" fontSize="11" width="143" display="still">still-exposure-proportion</monitor>
+    <plot x="1060" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="prey" y="345" xMin="0.0" height="250" legend="true" xMax="100.0" yMin="0.0" width="437" xAxis="ticks" display="Prey Population by Active Strategy"><setup></setup><update></update><pen interval="1.0" mode="0" display="Hide" color="-14513374" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Flee" color="-2703872" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Still" color="-23296" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Seek Cover" color="-16736080" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Total" color="-15461356" legend="true"><setup></setup><update></update></pen></plot>
+    <plot x="1060" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="count" y="600" xMin="0.0" height="250" legend="true" xMax="100.0" yMin="0.0" width="437" xAxis="ticks" display="Population and Predation"><setup></setup><update></update><pen interval="1.0" mode="0" display="Prey" color="-23296" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Founders" color="-7579096" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Captures" color="-2742232" legend="true"><setup></setup><update></update></pen><pen interval="1.0" mode="0" display="Births" color="-14513374" legend="true"><setup></setup><update></update></pen></plot>
   </widgets>
   <info>## WHAT IS IT?
 
@@ -2662,4 +3128,10 @@ end]]></code>
     </shape>
   </linkShapes>
   <previewCommands>setup repeat 75 [ go ]</previewCommands>
+<experiments>
+    <experiment name="self-test" repetitions="1" sequentialRunOrder="true" runMetricsEveryStep="false" timeLimit="1"><setup>run-self-test</setup><go>go</go><exitCondition>true</exitCondition><metrics><metric>final-tick</metric></metrics><constants><enumeratedValueSet variable="experiment-seed"><value value="1"></value></enumeratedValueSet><enumeratedValueSet variable="cover-amount-category"><value value="&quot;medium&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-arrangement"><value value="&quot;patchy&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-impact-strength"><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="enable-reproduction?"><value value="true"></value></enumeratedValueSet><enumeratedValueSet variable="experiment-duration"><value value="500"></value></enumeratedValueSet><enumeratedValueSet variable="hide-cover-threshold"><value value="0.55"></value></enumeratedValueSet><enumeratedValueSet variable="hide-detection-multiplier"><value value="0.15"></value></enumeratedValueSet><enumeratedValueSet variable="initial-octopuses"><value value="40"></value></enumeratedValueSet><enumeratedValueSet variable="initial-predators"><value value="3"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-cover-target"><value value="0.6"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-decision-score"><value value="0.08"></value></enumeratedValueSet><enumeratedValueSet variable="motion-detection-multiplier"><value value="1.5"></value></enumeratedValueSet><enumeratedValueSet variable="octopus-strategy-mode"><value value="&quot;adaptive-dmas&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="predator-detection-radius-setting"><value value="10"></value></enumeratedValueSet><enumeratedValueSet variable="predator-speed-setting"><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="prey-reaction-time-setting"><value value="2"></value></enumeratedValueSet><enumeratedValueSet variable="prey-speed-setting"><value value="0.6"></value></enumeratedValueSet><enumeratedValueSet variable="show-predator-radii?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="show-state-labels?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="update-live-plots?"><value value="false"></value></enumeratedValueSet></constants></experiment>
+    <experiment name="pilot" repetitions="1" sequentialRunOrder="true" runMetricsEveryStep="false" timeLimit="500"><setup>setup</setup><go>go</go><exitCondition>run-complete?</exitCondition><metrics><metric>final-tick</metric><metric>survival-rate</metric><metric>founder-survival-rate</metric><metric>capture-rate</metric><metric>mean-survival-time-contribution</metric><metric>mean-founder-survival-time</metric><metric>count octopuses</metric><metric>founders-alive</metric><metric>total-captures</metric><metric>total-births</metric><metric>extinction-time</metric><metric>run-censored?</metric><metric>first-capture-tick</metric><metric>mean-capture-tick</metric><metric>median-capture-tick</metric><metric>predator-capture-efficiency</metric><metric>detection-events</metric><metric>pursuit-events</metric><metric>realized-cover-mean</metric><metric>cover-availability</metric><metric>cover-variation</metric><metric>mean-distance-to-usable-cover</metric><metric>average-cover-usage</metric><metric>relative-cover-use</metric><metric>hide-decision-proportion</metric><metric>flee-decision-proportion</metric><metric>still-decision-proportion</metric><metric>seek-cover-decision-proportion</metric><metric>hide-exposure-proportion</metric><metric>flee-exposure-proportion</metric><metric>still-exposure-proportion</metric><metric>seek-cover-exposure-proportion</metric><metric>strategy-evenness</metric><metric>total-decisions</metric><metric>total-agent-ticks</metric><metric>mean-founder-age</metric><metric>predator-prey-speed-ratio</metric></metrics><constants><enumeratedValueSet variable="octopus-strategy-mode"><value value="&quot;still&quot;"></value><value value="&quot;hide&quot;"></value><value value="&quot;flee&quot;"></value><value value="&quot;adaptive-dmas&quot;"></value></enumeratedValueSet><steppedValueSet variable="experiment-seed" first="1" step="1" last="3"></steppedValueSet><enumeratedValueSet variable="cover-amount-category"><value value="&quot;medium&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-arrangement"><value value="&quot;patchy&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-impact-strength"><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="enable-reproduction?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="experiment-duration"><value value="500"></value></enumeratedValueSet><enumeratedValueSet variable="hide-cover-threshold"><value value="0.55"></value></enumeratedValueSet><enumeratedValueSet variable="hide-detection-multiplier"><value value="0.15"></value></enumeratedValueSet><enumeratedValueSet variable="initial-octopuses"><value value="40"></value></enumeratedValueSet><enumeratedValueSet variable="initial-predators"><value value="3"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-cover-target"><value value="0.6"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-decision-score"><value value="0.08"></value></enumeratedValueSet><enumeratedValueSet variable="motion-detection-multiplier"><value value="1.5"></value></enumeratedValueSet><enumeratedValueSet variable="predator-detection-radius-setting"><value value="10"></value></enumeratedValueSet><enumeratedValueSet variable="predator-speed-setting"><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="prey-reaction-time-setting"><value value="2"></value></enumeratedValueSet><enumeratedValueSet variable="prey-speed-setting"><value value="0.6"></value></enumeratedValueSet><enumeratedValueSet variable="show-predator-radii?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="show-state-labels?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="update-live-plots?"><value value="false"></value></enumeratedValueSet></constants></experiment>
+    <experiment name="main-factorial" repetitions="1" sequentialRunOrder="true" runMetricsEveryStep="false" timeLimit="500"><setup>setup</setup><go>go</go><exitCondition>run-complete?</exitCondition><metrics><metric>final-tick</metric><metric>survival-rate</metric><metric>founder-survival-rate</metric><metric>capture-rate</metric><metric>mean-survival-time-contribution</metric><metric>mean-founder-survival-time</metric><metric>count octopuses</metric><metric>founders-alive</metric><metric>total-captures</metric><metric>total-births</metric><metric>extinction-time</metric><metric>run-censored?</metric><metric>first-capture-tick</metric><metric>mean-capture-tick</metric><metric>median-capture-tick</metric><metric>predator-capture-efficiency</metric><metric>detection-events</metric><metric>pursuit-events</metric><metric>realized-cover-mean</metric><metric>cover-availability</metric><metric>cover-variation</metric><metric>mean-distance-to-usable-cover</metric><metric>average-cover-usage</metric><metric>relative-cover-use</metric><metric>hide-decision-proportion</metric><metric>flee-decision-proportion</metric><metric>still-decision-proportion</metric><metric>seek-cover-decision-proportion</metric><metric>hide-exposure-proportion</metric><metric>flee-exposure-proportion</metric><metric>still-exposure-proportion</metric><metric>seek-cover-exposure-proportion</metric><metric>strategy-evenness</metric><metric>total-decisions</metric><metric>total-agent-ticks</metric><metric>mean-founder-age</metric><metric>predator-prey-speed-ratio</metric></metrics><constants><enumeratedValueSet variable="octopus-strategy-mode"><value value="&quot;still&quot;"></value><value value="&quot;hide&quot;"></value><value value="&quot;flee&quot;"></value><value value="&quot;adaptive-dmas&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-amount-category"><value value="&quot;low&quot;"></value><value value="&quot;medium&quot;"></value><value value="&quot;high&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-arrangement"><value value="&quot;uniform&quot;"></value><value value="&quot;patchy&quot;"></value><value value="&quot;mixed&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="prey-speed-setting"><value value="0.4"></value><value value="0.6"></value><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="predator-speed-setting"><value value="0.6"></value><value value="0.8"></value><value value="1.0"></value></enumeratedValueSet><steppedValueSet variable="experiment-seed" first="1" step="1" last="30"></steppedValueSet><enumeratedValueSet variable="cover-impact-strength"><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="enable-reproduction?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="experiment-duration"><value value="500"></value></enumeratedValueSet><enumeratedValueSet variable="hide-cover-threshold"><value value="0.55"></value></enumeratedValueSet><enumeratedValueSet variable="hide-detection-multiplier"><value value="0.15"></value></enumeratedValueSet><enumeratedValueSet variable="initial-octopuses"><value value="40"></value></enumeratedValueSet><enumeratedValueSet variable="initial-predators"><value value="3"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-cover-target"><value value="0.6"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-decision-score"><value value="0.08"></value></enumeratedValueSet><enumeratedValueSet variable="motion-detection-multiplier"><value value="1.5"></value></enumeratedValueSet><enumeratedValueSet variable="predator-detection-radius-setting"><value value="10"></value></enumeratedValueSet><enumeratedValueSet variable="prey-reaction-time-setting"><value value="2"></value></enumeratedValueSet><enumeratedValueSet variable="show-predator-radii?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="show-state-labels?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="update-live-plots?"><value value="false"></value></enumeratedValueSet></constants></experiment>
+    <experiment name="speed-boundary" repetitions="1" sequentialRunOrder="true" runMetricsEveryStep="false" timeLimit="500"><setup>setup</setup><go>go</go><exitCondition>run-complete?</exitCondition><metrics><metric>final-tick</metric><metric>survival-rate</metric><metric>founder-survival-rate</metric><metric>capture-rate</metric><metric>mean-survival-time-contribution</metric><metric>mean-founder-survival-time</metric><metric>count octopuses</metric><metric>founders-alive</metric><metric>total-captures</metric><metric>total-births</metric><metric>extinction-time</metric><metric>run-censored?</metric><metric>first-capture-tick</metric><metric>mean-capture-tick</metric><metric>median-capture-tick</metric><metric>predator-capture-efficiency</metric><metric>detection-events</metric><metric>pursuit-events</metric><metric>realized-cover-mean</metric><metric>cover-availability</metric><metric>cover-variation</metric><metric>mean-distance-to-usable-cover</metric><metric>average-cover-usage</metric><metric>relative-cover-use</metric><metric>hide-decision-proportion</metric><metric>flee-decision-proportion</metric><metric>still-decision-proportion</metric><metric>seek-cover-decision-proportion</metric><metric>hide-exposure-proportion</metric><metric>flee-exposure-proportion</metric><metric>still-exposure-proportion</metric><metric>seek-cover-exposure-proportion</metric><metric>strategy-evenness</metric><metric>total-decisions</metric><metric>total-agent-ticks</metric><metric>mean-founder-age</metric><metric>predator-prey-speed-ratio</metric></metrics><constants><enumeratedValueSet variable="octopus-strategy-mode"><value value="&quot;hide&quot;"></value><value value="&quot;flee&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-arrangement"><value value="&quot;uniform&quot;"></value><value value="&quot;patchy&quot;"></value><value value="&quot;mixed&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="prey-speed-setting"><value value="0.2"></value><value value="0.4"></value><value value="0.6"></value><value value="0.8"></value><value value="1.0"></value><value value="1.2"></value><value value="1.4"></value></enumeratedValueSet><enumeratedValueSet variable="predator-speed-setting"><value value="0.2"></value><value value="0.4"></value><value value="0.6"></value><value value="0.8"></value><value value="1.0"></value><value value="1.2"></value><value value="1.4"></value></enumeratedValueSet><steppedValueSet variable="experiment-seed" first="1" step="1" last="15"></steppedValueSet><enumeratedValueSet variable="cover-amount-category"><value value="&quot;medium&quot;"></value></enumeratedValueSet><enumeratedValueSet variable="cover-impact-strength"><value value="0.8"></value></enumeratedValueSet><enumeratedValueSet variable="enable-reproduction?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="experiment-duration"><value value="500"></value></enumeratedValueSet><enumeratedValueSet variable="hide-cover-threshold"><value value="0.55"></value></enumeratedValueSet><enumeratedValueSet variable="hide-detection-multiplier"><value value="0.15"></value></enumeratedValueSet><enumeratedValueSet variable="initial-octopuses"><value value="40"></value></enumeratedValueSet><enumeratedValueSet variable="initial-predators"><value value="3"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-cover-target"><value value="0.6"></value></enumeratedValueSet><enumeratedValueSet variable="minimum-decision-score"><value value="0.08"></value></enumeratedValueSet><enumeratedValueSet variable="motion-detection-multiplier"><value value="1.5"></value></enumeratedValueSet><enumeratedValueSet variable="predator-detection-radius-setting"><value value="10"></value></enumeratedValueSet><enumeratedValueSet variable="prey-reaction-time-setting"><value value="2"></value></enumeratedValueSet><enumeratedValueSet variable="show-predator-radii?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="show-state-labels?"><value value="false"></value></enumeratedValueSet><enumeratedValueSet variable="update-live-plots?"><value value="false"></value></enumeratedValueSet></constants></experiment>
+  </experiments>
 </model>

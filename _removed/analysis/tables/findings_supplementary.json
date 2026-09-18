@@ -1,0 +1,242 @@
+{
+  "hide_wins_cells": 0,
+  "hide_wins_pct": 0.0,
+  "speed_boundary_hide_wins": 20,
+  "hide_wins_speed_ratio_threshold": 3.0,
+  "cover_mean_invariance": 0.0004901410692016439,
+  "heterogeneity_effect": [
+    {
+      "strategy": "still",
+      "cover": "low",
+      "omega_squared": 0.033564459716512236,
+      "survival_at_0_clusters": 0.05555555555555555,
+      "survival_at_60_clusters": 0.6666666666666666,
+      "cliffs_delta": 0.13530864197530867,
+      "magnitude": "negligible"
+    },
+    {
+      "strategy": "still",
+      "cover": "medium",
+      "omega_squared": 0.035833691099301734,
+      "survival_at_0_clusters": 1.1111111111111112,
+      "survival_at_60_clusters": 2.6666666666666665,
+      "cliffs_delta": 0.3441975308641976,
+      "magnitude": "medium"
+    },
+    {
+      "strategy": "still",
+      "cover": "high",
+      "omega_squared": -0.016042717934254633,
+      "survival_at_0_clusters": 9.333333333333334,
+      "survival_at_60_clusters": 9.944444444444445,
+      "cliffs_delta": 0.07950617283950612,
+      "magnitude": "negligible"
+    },
+    {
+      "strategy": "hide",
+      "cover": "low",
+      "omega_squared": 0.08674405943380059,
+      "survival_at_0_clusters": 0.2777777777777778,
+      "survival_at_60_clusters": 2.2777777777777777,
+      "cliffs_delta": 0.3412345679012345,
+      "magnitude": "medium"
+    },
+    {
+      "strategy": "hide",
+      "cover": "medium",
+      "omega_squared": 0.025027263515793055,
+      "survival_at_0_clusters": 8.722222222222221,
+      "survival_at_60_clusters": 12.555555555555555,
+      "cliffs_delta": 0.35604938271604936,
+      "magnitude": "medium"
+    },
+    {
+      "strategy": "hide",
+      "cover": "high",
+      "omega_squared": -0.009748879922065794,
+      "survival_at_0_clusters": 47.833333333333336,
+      "survival_at_60_clusters": 46.388888888888886,
+      "cliffs_delta": -0.13382716049382715,
+      "magnitude": "negligible"
+    },
+    {
+      "strategy": "flee",
+      "cover": "low",
+      "omega_squared": 0.001951961700972367,
+      "survival_at_0_clusters": 56.22222222222222,
+      "survival_at_60_clusters": 46.611111111111114,
+      "cliffs_delta": -0.22419753086419758,
+      "magnitude": "small"
+    },
+    {
+      "strategy": "flee",
+      "cover": "medium",
+      "omega_squared": 0.020080700286684957,
+      "survival_at_0_clusters": 62.666666666666664,
+      "survival_at_60_clusters": 67.5,
+      "cliffs_delta": 0.09629629629629632,
+      "magnitude": "negligible"
+    },
+    {
+      "strategy": "flee",
+      "cover": "high",
+      "omega_squared": 0.006194044825770268,
+      "survival_at_0_clusters": 87.77777777777777,
+      "survival_at_60_clusters": 86.55555555555556,
+      "cliffs_delta": -0.12691358024691357,
+      "magnitude": "negligible"
+    },
+    {
+      "strategy": "adaptive-dmas",
+      "cover": "low",
+      "omega_squared": 0.03982547992211199,
+      "survival_at_0_clusters": 33.94444444444444,
+      "survival_at_60_clusters": 27.944444444444443,
+      "cliffs_delta": -0.29580246913580244,
+      "magnitude": "small"
+    },
+    {
+      "strategy": "adaptive-dmas",
+      "cover": "medium",
+      "omega_squared": 0.001135754999692336,
+      "survival_at_0_clusters": 23.833333333333332,
+      "survival_at_60_clusters": 21.77777777777778,
+      "cliffs_delta": -0.1308641975308642,
+      "magnitude": "negligible"
+    },
+    {
+      "strategy": "adaptive-dmas",
+      "cover": "high",
+      "omega_squared": -0.003414377473613697,
+      "survival_at_0_clusters": 24.055555555555557,
+      "survival_at_60_clusters": 25.0,
+      "cliffs_delta": 0.05333333333333323,
+      "magnitude": "negligible"
+    }
+  ],
+  "reproduction_summary": [
+    {
+      "strategy": "flee",
+      "final_population": 249.97037037037038,
+      "births": 286.3851851851852,
+      "captures": 76.41481481481482,
+      "extinct_pct": 0.0
+    },
+    {
+      "strategy": "adaptive-dmas",
+      "final_population": 138.67407407407407,
+      "births": 225.07407407407408,
+      "captures": 126.4,
+      "extinct_pct": 32.592592592592595
+    },
+    {
+      "strategy": "hide",
+      "final_population": 2.3333333333333335,
+      "births": 28.814814814814813,
+      "captures": 66.48148148148148,
+      "extinct_pct": 62.22222222222222
+    },
+    {
+      "strategy": "still",
+      "final_population": 0.0,
+      "births": 4.029629629629629,
+      "captures": 44.02962962962963,
+      "extinct_pct": 100.0
+    }
+  ],
+  "evolutionary_extinct_pct": 6.11,
+  "evolutionary_final_shares": {
+    "share_flee": 0.9492421470338334,
+    "share_seek-cover": 0.04272538731285366,
+    "share_hide": 0.0078036688091314334,
+    "share_still": 0.00022879684418145957
+  },
+  "still_motion_invariance": 0.0,
+  "hide_motion_invariance": 0.0,
+  "motion_penalty_threshold": 4.0,
+  "policy_tournament": [
+    {
+      "policy": "flee",
+      "n": 1215,
+      "survival": 66.84156378600824,
+      "ci_lo": 64.940329218107,
+      "ci_hi": 68.72021604938271,
+      "extinct_pct": 6.748971193415638
+    },
+    {
+      "policy": "adaptive-dmas",
+      "n": 1215,
+      "survival": 43.629629629629626,
+      "ci_lo": 41.49588477366255,
+      "ci_hi": 45.76543209876543,
+      "extinct_pct": 5.267489711934156
+    },
+    {
+      "policy": "seek-cover",
+      "n": 1215,
+      "survival": 24.20164609053498,
+      "ci_lo": 23.06584362139918,
+      "ci_hi": 25.339506172839506,
+      "extinct_pct": 17.86008230452675
+    },
+    {
+      "policy": "hide",
+      "n": 1215,
+      "survival": 20.38888888888889,
+      "ci_lo": 19.156378600823047,
+      "ci_hi": 21.635802469135804,
+      "extinct_pct": 21.728395061728396
+    },
+    {
+      "policy": "still",
+      "n": 1215,
+      "survival": 4.148148148148148,
+      "ci_lo": 3.794187242798354,
+      "ci_hi": 4.522633744855967,
+      "extinct_pct": 55.06172839506173
+    }
+  ],
+  "replication_max_abs_diff": 0.42386831275719317,
+  "reaction_time_effect": [
+    {
+      "policy": "flee",
+      "survival_at_0": 72.27777777777777,
+      "survival_at_15": 53.55555555555556,
+      "change": -18.722222222222214,
+      "cliffs_delta": -0.4093827160493827,
+      "magnitude": "medium"
+    },
+    {
+      "policy": "adaptive-dmas",
+      "survival_at_0": 24.27777777777778,
+      "survival_at_15": 7.666666666666667,
+      "change": -16.61111111111111,
+      "cliffs_delta": -0.7817283950617284,
+      "magnitude": "large"
+    },
+    {
+      "policy": "hide",
+      "survival_at_0": 20.27777777777778,
+      "survival_at_15": 17.444444444444443,
+      "change": -2.8333333333333357,
+      "cliffs_delta": -0.11555555555555552,
+      "magnitude": "negligible"
+    },
+    {
+      "policy": "seek-cover",
+      "survival_at_0": 28.333333333333332,
+      "survival_at_15": 25.555555555555557,
+      "change": -2.777777777777775,
+      "cliffs_delta": -0.11802469135802474,
+      "magnitude": "negligible"
+    },
+    {
+      "policy": "still",
+      "survival_at_0": 4.166666666666667,
+      "survival_at_15": 4.166666666666667,
+      "change": 0.0,
+      "cliffs_delta": 0.0,
+      "magnitude": "negligible"
+    }
+  ]
+}

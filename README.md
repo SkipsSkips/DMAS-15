@@ -33,16 +33,19 @@ The visual animation helps explain the model, but the main contribution is the c
 12. [Model parameters](#model-parameters)
 13. [Metrics](#metrics)
 14. [Running the model](#running-the-model)
-14. [Recommended Interface controls](#recommended-interface-controls)
-15. [Experimental design](#experimental-design)
-16. [BehaviorSpace configuration](#behaviorspace-configuration)
-17. [Interpreting results](#interpreting-results)
-18. [Hypotheses](#hypotheses)
-19. [Important experimental cautions](#important-experimental-cautions)
-20. [Assumptions and limitations](#assumptions-and-limitations)
-21. [Implemented functionality](#implemented-functionality)
-22. [Future work](#future-work)
-23. [Suggested report structure](#suggested-report-structure)
+15. [Interface controls](#interface-controls)
+16. [Self test](#self-test)
+17. [Experimental design](#experimental-design)
+18. [BehaviorSpace configuration](#behaviorspace-configuration)
+19. [Results](#results)
+20. [Analysis pipeline](#analysis-pipeline)
+21. [Hypotheses](#hypotheses)
+22. [Important experimental cautions](#important-experimental-cautions)
+23. [Assumptions and limitations](#assumptions-and-limitations)
+24. [Implemented functionality](#implemented-functionality)
+25. [Future work](#future-work)
+26. [Suggested report structure](#suggested-report-structure)
+27. [Project summary](#project-summary)
 
 ---
 
@@ -1331,130 +1334,130 @@ show flee-decision-proportion
 
 ---
 
-# Recommended Interface controls
+# Interface controls
 
-The core model can be controlled from the Command Center, but adding Interface widgets makes experiments easier.
+Twenty-one parameter widgets, two buttons, twelve monitors and two plots.
 
-Because `.nlogox` stores its Interface as XML, widgets should preferably be added through the NetLogo Interface editor rather than by manually editing raw XML.
+A parameter gets a widget only if an experiment varies it, if it differs
+between experiments, or if it is worth tuning by hand. Everything else is a
+**model constant**, set once in `set-model-constants` at the top of `setup`.
+A slider that every experiment pins to the same value is surface area with no
+purpose, so fourteen of them were moved back into code. Promoting one back to
+a slider is a one-step change if it becomes a variable of interest.
 
-## Recommended choosers
+There is deliberately **no `startup` procedure**: one that re-applied
+hard-coded defaults would discard Interface settings every time the model was
+opened. `validate-parameters` is the safety net instead, and it only repairs
+values that are impossible, so BehaviorSpace stays free to explore.
 
-### Cover amount
+## Buttons
 
-Global variable:
+`setup` and `go`. Nothing else.
 
-```text
-cover-amount-category
+## Choosers
+
+| Chooser | Values |
+|---|---|
+| `cover-amount-category` | `low`, `medium`, `high` |
+| `cover-arrangement` | `uniform`, `patchy`, `mixed` |
+| `octopus-strategy-mode` | `adaptive-dmas`, `hide`, `flee`, `still`, `seek-cover`, `experimental-assigned` |
+
+## Sliders
+
+| Slider | Range | Step | Default | Why it has a widget |
+|---|---|---|---|---|
+| `initial-octopuses` | 1 – 300 | 1 | 40 | population size |
+| `initial-predators` | 0 – 20 | 1 | 3 | predation pressure, for live demos |
+| `experiment-duration` | 50 – 5000 | 50 | 500 | differs between experiments |
+| `experiment-seed` | 0 – 1000 | 1 | 1 | **factor** in every experiment |
+| `prey-speed-setting` | 0 – 2 | 0.05 | 0.6 | **factor** |
+| `predator-speed-setting` | 0 – 2 | 0.05 | 0.8 | **factor** |
+| `predator-detection-radius-setting` | 1 – 25 | 0.5 | 10 | core detection parameter |
+| `prey-reaction-time-setting` | 0 – 20 | 1 | 2 | reaction delay (H9) |
+| `cover-impact-strength` | 0 – 1 | 0.05 | 0.8 | detection model |
+| `hide-detection-multiplier` | 0 – 1 | 0.01 | 0.15 | detection model |
+| `motion-detection-multiplier` | 0 – 5 | 0.1 | 1.5 | detection model (H8) |
+| `minimum-decision-score` | 0 – 1 | 0.01 | 0.08 | routes agents to "still" — see [Results](#results) |
+| `minimum-cover-target` | 0 – 1 | 0.01 | 0.60 | adaptive threshold |
+| `hide-cover-threshold` | 0 – 1 | 0.01 | 0.55 | adaptive threshold |
+
+## Switches
+
+| Switch | Default | Purpose |
+|---|---|---|
+| `enable-reproduction?` | on | sexual reproduction with policy inheritance |
+| `show-predator-radii?` | on | draw predator perception rings |
+| `show-state-labels?` | on | label each agent with its state |
+| `update-live-plots?` | on | update the two live plots |
+
+The last three exist for speed as much as display, and every experiment turns
+them off. Ring drawing calls `clear-drawing` and traces two 72-segment circles
+per predator per tick; `update-live-plots?` avoids a per-tick `carefully`
+wrapper. That is much of why the 9,720-run factorial takes about 25 minutes on
+two cores rather than an evening.
+
+## Model constants
+
+Set in `set-model-constants`, not on the Interface: `capture-distance`,
+`predator-wander-angle`, `predator-search-speed-factor`,
+`threat-awareness-radius`, `critical-threat-distance`, `seek-cover-radius`,
+`minimum-cover-improvement`, `reef-cluster-count`, `reef-cluster-radius`,
+`maturity-age`, `reproduction-cooldown-setting`, `mating-radius`,
+`offspring-per-birth`, `carrying-capacity`.
+
+## Monitors and plots
+
+Twelve monitors: survival outcomes, realised environment, and share of
+prey-ticks spent in each action. That last group is **exposure**, not decision
+count — detection risk accrues per tick, not per decision, so an octopus that
+hides once and stays hidden for 200 ticks made one decision but spent 200
+ticks at the hiding risk profile.
+
+Two plots: *Prey Population by Active Strategy* and *Population and
+Predation*.
+
+# Self test
+
+The model carries an invariant suite. Run it headless:
+
+```bash
+netlogo-headless.sh --model octoplus.nlogox --experiment self-test --table /dev/null
 ```
 
-Choices:
+Fifteen checks, printing `RESULT: PASS` or `RESULT: FAIL`:
 
-```text
-"low"
-"medium"
-"high"
-```
+- realised cover mean matches its target in all nine cover-amount by
+  arrangement combinations, within 0.02;
+- exposure and decision proportions each sum to 1;
+- survival rates, strategy evenness and patch cover stay within bounds;
+- the life clock advances exactly once per tick for every living prey;
+- prey are accounted for: `count octopuses = starting + births - captures`;
+- every fixed policy is able to reproduce at all;
+- the same seed reproduces a run exactly.
 
-### Cover arrangement
+Two of these are regression tests for defects this model actually had.
 
-Global variable:
+**The life clock.** Ageing used to live inside `try-reproduce`, which is
+skipped while a prey is in its reaction delay, so `age` counted *ticks not
+spent reacting* rather than ticks lived. Maturity therefore arrived later for
+prey in dangerous environments than for prey in calm ones — a confound
+between the reproduction model and the predation model. Ageing now happens in
+`advance-life-clock` at the top of every prey's turn.
 
-```text
-cover-arrangement
-```
+**Policy fertility.** The reproduction guard used to read
+`if active-strategy = "flee" [ stop ]`. For an adaptive prey that flees
+occasionally, that is a reasonable "too busy escaping" rule. For the fixed
+flee policy it was permanent sterility: such a prey has
+`active-strategy = "flee"` on every tick of its life, and across 135
+reproduction-enabled runs it produced **zero** births. The consequence was not
+a small bias — it inverted the result, making the adaptive policy look like a
+runaway winner when in fact fleeing saturates the carrying capacity in every
+run. The condition is now stated in terms of the threat situation, so it
+applies identically to every policy.
 
-Choices:
-
-```text
-"uniform"
-"patchy"
-"mixed"
-```
-
-### Strategy
-
-Global variable:
-
-```text
-octopus-strategy-mode
-```
-
-Choices:
-
-```text
-"still"
-"hide"
-"flee"
-"adaptive-dmas"
-"seek-cover"
-"experimental-assigned"
-```
-
-## Recommended sliders
-
-| Global | Minimum | Maximum | Increment | Default |
-|---|---:|---:|---:|---:|
-| `initial-octopuses` | 1 | 100 | 1 | 40 |
-| `initial-predators` | 0 | 10 | 1 | 3 |
-| `predator-speed-setting` | 0 | 2 | 0.1 | 0.8 |
-| `prey-speed-setting` | 0 | 2 | 0.1 | 0.6 |
-| `predator-detection-radius-setting` | 1 | 20 | 1 | 10 |
-| `prey-reaction-time-setting` | 0 | 10 | 1 | 2 |
-| `critical-threat-distance` | 0 | 10 | 0.5 | 3 |
-| `seek-cover-radius` | 1 | 15 | 1 | 5 |
-| `cover-impact-strength` | 0 | 1 | 0.05 | 0.8 |
-| `hide-detection-multiplier` | 0 | 1 | 0.05 | 0.15 |
-| `motion-detection-multiplier` | 1 | 3 | 0.1 | 1.5 |
-| `experiment-duration` | 100 | 2000 | 100 | 500 |
-| `experiment-seed` | 1 | 10000 | 1 | 1 |
-
-## Recommended switches
-
-```text
-show-predator-radii?
-show-state-labels?
-```
-
-## Recommended monitors
-
-Add monitors for:
-
-```text
-ticks
-count octopuses
-survival-rate
-total-captures
-cumulative-survival
-mean-capture-tick
-average-world-cover
-cover-availability-percent
-cover-variation
-relative-cover-use
-hide-decision-proportion
-flee-decision-proportion
-```
-
-## Recommended plot
-
-Plot name:
-
-```text
-Prey Population by Active Strategy
-```
-
-Pens:
-
-```text
-Hide
-Flee
-Still
-Seek Cover
-Total
-```
-
-The code safely ignores missing plots, so the model can still run before this plot is created.
-
----
+The determinism check matters for a different reason: the entire paired
+statistical analysis depends on a seed reproducing the same world, so it is
+asserted rather than assumed.
 
 # Experimental design
 
@@ -1611,395 +1614,253 @@ This determines whether conclusions depend excessively on one arbitrary paramete
 
 # BehaviorSpace configuration
 
-A BehaviorSpace experiment should use:
+Four experiments ship inside the model file. None needs to be recreated by
+hand. Each pins every parameter it is not varying, so a run is determined by
+its factors rather than by whatever the sliders happen to show.
 
-## Setup command
+| Experiment | Runs | Ticks | What it answers |
+|---|---:|---:|---|
+| `self-test` | 1 | 1 | Are the model's invariants intact? |
+| `pilot` | 12 | 500 | Smoke test and timing before a long run |
+| `main-factorial` | 9,720 | 500 | The full design from this README |
+| `speed-boundary` | 4,410 | 500 | Where is the hide/flee crossover? |
 
-```netlogo
-setup
+## Running them
+
+```bash
+netlogo-headless.sh \
+  --model octoplus.nlogox \
+  --experiment main-factorial \
+  --table results/main-factorial.csv \
+  --threads 2
 ```
 
-## Go command
+The factorial takes roughly 25 minutes on two cores. Raise `--threads` to the
+number of physical cores available.
 
-```netlogo
-go
+## Setup, go and stop
+
+| Field | Value |
+|---|---|
+| setup | `setup` |
+| go | `go` |
+| stop condition | `run-complete?` |
+| time limit | the experiment's tick budget |
+| metrics every step | off |
+
+`run-complete?` is the exit condition rather than a hand-written expression so
+that BehaviorSpace and the model can never disagree about when a run is over.
+
+## Why the factorial disables reproduction
+
+`survival-rate` divides the current population by the starting population.
+With births enabled that ratio mixes survival with recruitment and can exceed
+100, making it a population index rather than a survival measure. The
+factorial therefore runs with `enable-reproduction?` off.
+
+For runs where reproduction *is* enabled, use the **founder** reporters. The
+founder cohort is fixed at setup and never grows, so `founder-survival-rate`
+stays a true survival measure under every setting.
+
+## Metrics
+
+Each run records 37 metrics at the end: survival and capture outcomes,
+censoring-aware extinction timing, predator efficiency, realised environment
+properties, decision proportions, exposure proportions, and strategy evenness.
+
+Two families are worth distinguishing. **Decision proportions** count
+transitions *into* a strategy — how often it was chosen. **Exposure
+proportions** count agent-ticks *spent* in it — how much of the run went on
+it, which is what determines cumulative detection risk.
+
+`strategy-evenness` is the Shannon evenness of the exposure mix on a 0-to-1
+scale: the single number answering "did the adaptive policy behave adaptively,
+or collapse onto one fixed action?".
+
+## Censoring
+
+`extinction-time` reports `-1` when a population survived to the time limit.
+That sentinel must never be treated as a time: such a run is a
+**right-censored** observation, and scoring it as a death at the time limit
+would badly understate the better strategies. The analysis pipeline converts
+the sentinel into a `(time, event)` pair before any survival analysis.
+
+# Results
+
+Every number in this section is produced by `analysis/run_analysis.py` from the raw BehaviorSpace CSVs in `results/`, and the section itself is regenerated by `write_results.py` rather than edited by hand, so the document and the data cannot drift apart.
+
+## Which strategy survives
+
+Main factorial, 9,720 runs, reproduction disabled, founder survival after 500 ticks.
+
+| Strategy | Survival % | 95% CI | Runs ending in extinction % | n |
+|---|---:|---:|---:|---:|
+| Flee | 67.3 | 65.9 – 68.6 | 6.7 | 2430 |
+| Adaptive | 43.7 | 42.2 – 45.2 | 5.8 | 2430 |
+| Hide | 20.5 | 19.7 – 21.4 | 24.2 | 2430 |
+| Still | 4.3 | 4.0 – 4.6 | 54.4 | 2430 |
+
+Paired comparisons, matched on seed so both strategies face the identical world:
+
+| Comparison | Median difference | Cliff's delta | Magnitude | p (Holm) |
+|---|---:|---:|---|---:|
+| Hide vs Still | 10.0 | 0.461 | medium | 5.8e-289 |
+| Flee vs Still | 75.0 | 0.860 | large | < 1e-300 |
+| Flee vs Hide | 47.5 | 0.701 | large | < 1e-300 |
+| Adaptive vs Still | 22.5 | 0.788 | large | < 1e-300 |
+| Adaptive vs Hide | 12.5 | 0.378 | medium | 4.3e-113 |
+| Adaptive vs Flee | -10.0 | -0.286 | small | 9.9e-222 |
+
+![Survival by strategy and environment](analysis/figures/fig01_survival_grid.png)
+
+## What decides survival
+
+| Factor | Levels | Omega squared |
+|---|---:|---:|
+| strategy | 4 | 0.4201 |
+| pred/prey speed ratio | 8 | 0.1960 |
+| pred_speed | 3 | 0.1042 |
+| cover | 3 | 0.0742 |
+| prey_speed | 3 | 0.0737 |
+| arrangement | 3 | -0.0002 |
+
+**Cover arrangement explains essentially nothing (omega squared = -0.0002, indistinguishable from zero) once cover amount is controlled.** That answers research questions 3 and 4, and it is only a meaningful answer because `normalize-cover-to-target` holds the realised mean at its target: without that normalisation, arrangement and amount would be confounded and the null would be uninterpretable.
+
+![Variance explained](analysis/figures/fig04_variance_explained.png)
+
+## The hide-versus-flee boundary
+
+Inside the factorial, hiding loses in 26 of 27 speed by cover cells, by 35 to 54 survival points. Read alone, that says there is no boundary.
+
+![No boundary inside the factorial](analysis/figures/fig02_hide_flee_boundary.png)
+
+That conclusion is an artefact of the sampled range.
+
+The factorial samples prey speed in {0.4, 0.6, 0.8} and predator speed in {0.6, 0.8, 1.0}, so the highest predator/prey ratio it can reach is **2.5**. Sweeping both speeds from 0.2 to 1.4 puts the crossover at a ratio of **3.0** — one step beyond the design's reach.
+
+| Predator/prey speed ratio | Hide advantage (% points) |
+|---:|---:|
+| 1.50 | -42.7 |
+| 1.67 | -34.3 |
+| 1.75 | -22.2 |
+| 2.00 | -21.6 |
+| 2.33 | -6.8 |
+| 2.50 | -9.1 |
+| 3.00 | 0.9 |
+| 3.50 | 3.5 |
+| 4.00 | 8.1 |
+| 5.00 | 5.7 |
+
+**Hiding wins only when prey are near-immobile relative to the predator** — that is, exactly when fleeing cannot work. This is the most important correction to the original experimental design, and it is the result the report should lead with.
+
+![Speed boundary](analysis/figures/fig06_speed_boundary.png)
+
+## Did the adaptive policy behave adaptively?
+
+Yes in direction, no in calibration.
+
+Its share of prey-ticks spent hiding correlates **+0.81** with realised cover, and its share spent fleeing **-0.73**. The decision rule genuinely reads the environment.
+
+But it spends roughly three quarters of every run standing still, in every condition — and standing still is the worst available action almost everywhere. That one number explains the gap between the adaptive policy and plain fleeing. `minimum-decision-score` is the slider that routes an agent there when neither hiding nor fleeing scores well.
+
+| Environment | Still % | Hide % | Flee % | Seek cover % | Evenness |
+|---|---:|---:|---:|---:|---:|
+| low / uniform | 74.6 | 8.8 | 16.6 | 0.0 | 0.519 |
+| low / patchy | 75.5 | 11.2 | 11.5 | 1.8 | 0.555 |
+| low / mixed | 75.8 | 9.9 | 12.9 | 1.4 | 0.543 |
+| medium / uniform | 74.3 | 17.1 | 8.6 | 0.0 | 0.518 |
+| medium / patchy | 74.5 | 16.6 | 7.4 | 1.5 | 0.548 |
+| medium / mixed | 75.0 | 16.3 | 7.3 | 1.5 | 0.541 |
+| high / uniform | 73.0 | 22.3 | 4.8 | 0.0 | 0.503 |
+| high / patchy | 73.0 | 22.2 | 4.8 | 0.0 | 0.503 |
+| high / mixed | 73.0 | 22.3 | 4.6 | 0.0 | 0.501 |
+
+The `seek-cover` column is a second finding: the adaptive policy almost never selects the one action that would let a prey improve its position before hiding.
+
+![Adaptive behaviour](analysis/figures/fig05_adaptive_behaviour.png)
+
+## Time to extinction
+
+Kaplan-Meier with right-censoring: a run ending with prey alive is censored, not counted as a death.
+
+| Strategy | Runs extinct % | Median extinction tick | Populations alive at tick 500 % |
+|---|---:|---:|---:|
+| Still | 54.4 | 300 | 45.6 |
+| Hide | 24.2 | 316 | 75.8 |
+| Flee | 6.7 | 360 | 93.3 |
+| Adaptive | 5.8 | 395 | 94.2 |
+
+The adaptive policy has the **lowest** extinction rate and the **longest** median time to extinction despite a lower mean survival than fleeing. It hedges against total collapse rather than against attrition — a different thing to optimise for, and worth saying explicitly.
+
+![Time to extinction](analysis/figures/fig03_time_to_extinction.png)
+
+
+# Analysis pipeline
+
+`analysis/` regenerates every table and figure in the Results section from the
+raw BehaviorSpace CSVs. No number in the write-up is typed in by hand.
+
+```bash
+python3 analysis/run_analysis.py   # tables and figures
+python3 write_results.py           # rewrites the Results section from them
 ```
 
-## Stop condition
-
-```netlogo
-run-complete?
-```
-
-Alternatively, set the time limit to:
-
-```text
-500 steps
-```
-
-and use:
-
-```netlogo
-experiment-duration = 500
-```
-
-## Suggested variables
-
-### Strategy
-
-```netlogo
-["still" "hide" "flee" "adaptive-dmas"]
-```
-
-### Cover amount
-
-```netlogo
-["low" "medium" "high"]
-```
-
-### Cover arrangement
-
-Initial experiment:
-
-```netlogo
-["uniform" "patchy"]
-```
-
-Expanded experiment:
-
-```netlogo
-["uniform" "patchy" "mixed"]
-```
-
-### Prey speed
-
-```netlogo
-[0.4 0.6 0.8]
-```
-
-### Predator speed
-
-```netlogo
-[0.6 0.8 1.0]
-```
-
-### Seeds
-
-Use explicit seeds so treatments can be matched.
-
-For example:
-
-```text
-1 through 30
-```
-
-Set:
-
-```text
-experiment-seed
-```
-
-as the varied seed parameter.
-
-Do not rely only on the BehaviorSpace repetition option if matched seeds across strategy conditions are required. Explicitly varying `experiment-seed` makes the seed visible in exported results.
-
-## Recommended metrics
-
-Record:
-
-```netlogo
-ticks
-experiment-seed
-count octopuses
-survival-rate
-capture-rate
-total-captures
-cumulative-survival
-mean-survival-time-contribution
-mean-capture-tick
-median-capture-tick
-first-capture-tick
-last-capture-tick
-detection-events
-pursuit-events
-predator-capture-efficiency
-average-world-cover
-cover-availability
-cover-variation
-mean-distance-to-usable-cover
-average-cover-usage
-relative-cover-use
-predator-prey-speed-ratio
-hide-decisions
-flee-decisions
-still-decisions
-seek-cover-decisions
-hide-decision-proportion
-flee-decision-proportion
-still-decision-proportion
-seek-cover-decision-proportion
-```
-
-## Fixed settings for the first experiment
-
-Recommended initial constants:
-
-```text
-initial octopuses = 40
-initial predators = 3
-detection radius = 10
-reaction time = 2
-capture distance = 0.5
-experiment duration = 500
-cover impact strength = 0.8
-hiding multiplier = 0.15
-movement multiplier = 1.5
-```
-
-Change one group of parameters at a time.
-
----
-
-# Interpreting results
-
-## Which strategy is best?
-
-For each experimental condition:
-
-1. Calculate mean survival rate for each fixed strategy.
-2. Calculate uncertainty across repeated seeds.
-3. Identify the fixed strategy with the greatest mean survival.
-4. Compare adaptive survival against the best fixed strategy.
-5. Examine cumulative survival and capture time as secondary outcomes.
-6. Examine adaptive decision proportions to understand why its result occurred.
-
-Do not compare adaptive behavior only with the average of the fixed strategies. Compare it with the **best fixed strategy available in that condition**.
-
-## Adaptive advantage
-
-Adaptive advantage should be calculated during external analysis because strategies run in separate simulations.
-
-For a condition \(c\):
-
-```text
-best fixed survival(c) =
-    max(
-        mean still survival(c),
-        mean hide survival(c),
-        mean flee survival(c)
-    )
-```
-
-Then:
-
-```text
-adaptive advantage(c) =
-    mean adaptive survival(c)
-    - best fixed survival(c)
-```
-
-Interpretation:
-
-| Adaptive advantage | Meaning |
-|---:|---|
-| Positive | Adaptive outperformed the best fixed baseline |
-| Approximately zero | Adaptive matched the best fixed baseline |
-| Negative | A fixed strategy outperformed adaptive |
-
-This difference should be reported with uncertainty, not as a single unsupported number.
-
-## When is hiding better?
-
-Evidence favoring hiding would include:
-
-- always-hide survival exceeding always-flee survival;
-- increased time to capture under hiding;
-- positive performance as cover availability increases;
-- stronger hiding performance at lower `hide-detection-multiplier` values;
-- stronger hiding performance when predators are faster than prey.
-
-A useful comparison is:
-
-```text
-hide advantage =
-    mean hide survival - mean flee survival
-```
-
-Positive values favor hiding.
-
-## When is fleeing better?
-
-Evidence favoring fleeing would include:
-
-- always-flee survival exceeding always-hide survival;
-- lower predator/prey speed ratios;
-- low cover availability;
-- large distances between usable cover patches;
-- weak camouflage effectiveness;
-- a low movement detection penalty.
-
-## When is staying still better?
-
-Staying still may perform well when:
-
-- movement greatly increases detection;
-- hiding provides little benefit because local cover is weak;
-- predators are sufficiently distant;
-- movement would expose prey without creating enough separation.
-
-The still baseline is important because hiding and immobility should not be treated as the same action.
-
-## When does seeking cover help?
-
-Seeking cover may help when:
-
-- current local cover is weak;
-- strong cover exists nearby;
-- cover improvement is substantial;
-- prey can reach it before the predator;
-- the movement detection penalty is not too large.
-
-It may hurt when:
-
-- useful patches are too far away;
-- predators are fast;
-- prey reaction time is long;
-- movement strongly increases detection;
-- cover is already adequate locally.
-
-## Interpreting environmental categories
-
-Do not report only that an environment was `"low"`, `"medium"`, or `"high"`.
-
-Also report:
-
-- realized mean cover;
-- cover availability;
-- cover variation;
-- mean distance to usable cover.
-
-For example, two medium-cover environments may both have mean cover near `0.45`, but one could have:
-
-- low variation and moderate cover everywhere;
-
-while the other has:
-
-- high-cover clusters separated by open areas.
-
-Those environments can produce different behavior even though their means are similar.
-
-## Recommended plots
-
-### Strategy survival by cover amount
-
-```text
-x-axis: average-world-cover
-y-axis: mean survival-rate
-line or color: strategy
-```
-
-### Strategy survival by arrangement
-
-```text
-x-axis: cover arrangement
-y-axis: mean survival-rate
-group: strategy
-```
-
-### Hide versus flee heatmap
-
-```text
-x-axis: average-world-cover or cover-availability
-y-axis: predator-prey-speed-ratio
-cell color: hide survival - flee survival
-```
-
-Interpretation:
-
-- positive cells favor hiding;
-- negative cells favor fleeing;
-- values near zero indicate similar performance.
-
-### Adaptive advantage heatmap
-
-```text
-x-axis: cover availability
-y-axis: predator-prey-speed-ratio
-cell color: adaptive advantage
-```
-
-### Adaptive decision response
-
-```text
-x-axis: average-world-cover
-y-axis: hide-decision-proportion
-```
-
-A functioning adaptive policy should generally hide more often as useful cover increases, although the relationship may also depend on predator distance and speed.
-
-### Survival through time
-
-Plot:
-
-```text
-tick
-against
-mean number of surviving prey
-```
-
-This can reveal important differences hidden by final survival alone.
-
----
+| File | Role |
+|---|---|
+| `analysis/load.py` | Reads BehaviorSpace tables, renames columns, converts the extinction sentinel into a `(time, event)` pair |
+| `analysis/stats_core.py` | Statistical primitives, each documenting its assumption |
+| `analysis/figstyle.py` | Shared styling and the strategy colour assignment |
+| `analysis/run_analysis.py` | Integrity checks, descriptives, paired tests, variance decomposition, survival analysis, the speed boundary, all six figures |
+
+Raw results are gzipped in `results/`; the loader reads `.csv.gz`
+transparently.
+
+## Methods and why each was chosen
+
+| Method | Used for | Why |
+|---|---|---|
+| Percentile bootstrap CI | every reported mean | survival is bounded at 0 and 100 and skewed near the bounds, where a normal approximation is unsafe |
+| Paired Wilcoxon signed-rank | strategy comparisons | for a given seed every strategy faces the identical world and identical initial placement, so pairing removes all environment variance |
+| Cliff's delta | effect size | non-parametric; outcomes are bounded and often bimodal, which makes a standardised mean difference hard to interpret |
+| Holm-Bonferroni | multiple comparisons | uniformly more powerful than Bonferroni, no independence assumption |
+| Omega-squared | factor importance | with 9,720 runs almost anything is significant, so the question is how much variance a factor explains; omega-squared is unbiased where eta-squared is not |
+| Kaplan-Meier + log-rank | time to extinction | runs ending with prey alive are right-censored |
+
+## The pairing guarantee
+
+The paired analysis is only valid if a seed really reproduces the same world.
+That is checked, not assumed, in two places: the self test compares full run
+signatures across two identical-seed runs, and the pipeline verifies that
+realised cover mean is bit-identical across all strategies within each
+`(cover, arrangement, seed)` group. On the published factorial the maximum
+spread was `0.00e+00`.
 
 # Hypotheses
 
-The following are hypotheses to test, not established findings.
+Stated before the experiments were run; each now carries the verdict the
+evidence supports. Keeping the original wording alongside the outcome is
+deliberate — a hypothesis that turned out wrong in an interesting way is worth
+more in a report than one quietly deleted.
 
-## H1: Cover amount
+| | Hypothesis | Verdict |
+|---|---|---|
+| H1 | Increasing cover improves hiding more than fleeing | **Supported.** Hiding rises 1.3% to 36.3% survival from low to high cover; fleeing 52% to 84%. Hiding gains far more in relative terms, though it never catches up in absolute terms. |
+| H2 | Fleeing outperforms hiding in open environments with competitive prey speed | **Supported, and then some.** Fleeing wins in every cell of the factorial, not only the open ones. |
+| H3 | Hiding outperforms fleeing with high cover, effective camouflage and faster predators | **Only the third condition does the work.** High cover and good camouflage are not sufficient. Hiding wins when the predator/prey speed ratio reaches 3.0 — that is, when fleeing stops being possible. |
+| H4 | Patchy and uniform environments with similar mean cover produce different outcomes | **Not supported.** Cover arrangement explains omega squared = -0.0002 of variance in survival, indistinguishable from zero. |
+| H5 | Seeking cover helps when strong cover is near and hurts when it is far | **Not testable from this design.** `seek-cover` is not one of the factorial's four strategy levels, and the adaptive policy selects it on 0.7% of prey-ticks. Adding it as a fifth level is the obvious next experiment. |
+| H6 | Adaptive prey outperform fixed strategies in heterogeneous environments | **Not supported.** The adaptive policy loses to plain fleeing in every environment and is the single best choice in only 13.4% of cells. Its failure mode is specific and fixable: it stands still about three quarters of the time. |
+| H7 | In uniform environments a fixed strategy may match or beat adaptive behaviour | **Supported, but for the wrong reason.** A fixed strategy beats it everywhere, uniform or not, so the prediction is right without its mechanism being right. |
+| H8 | Raising `motion-detection-multiplier` reduces the relative benefit of fleeing | **Untested here.** The slider exists and the factorial holds it at 1.5. A sweep is cheap and would close this. |
+| H9 | Longer reaction times reduce survival | **Untested here.** `prey-reaction-time-setting` is a slider held at 2 throughout. |
 
-Increasing environmental cover will improve hiding performance more strongly than fleeing performance.
+## What the hypotheses collectively got wrong
 
-## H2: Open environments
-
-Fleeing will outperform hiding when:
-
-- cover availability is low;
-- prey speed is competitive with predator speed;
-- movement detection costs are moderate.
-
-## H3: Dense environments
-
-Hiding will outperform fleeing when:
-
-- cover availability is high;
-- camouflage is effective;
-- predators are faster than prey.
-
-## H4: Spatial arrangement
-
-Patchy and uniform environments with similar mean cover will produce different outcomes because usable hiding patches have different accessibility.
-
-## H5: Seeking cover
-
-Seeking cover will be beneficial when strong cover is nearby, but harmful when useful cover is too distant relative to predator arrival time.
-
-## H6: Adaptive behavior
-
-Adaptive prey will outperform fixed strategies in heterogeneous environments where the best action changes across local situations.
-
-## H7: Uniform conditions
-
-In highly uniform environments, one fixed strategy may match or outperform adaptive behavior because local decisions have less environmental variation to exploit.
-
-## H8: Movement visibility
-
-Increasing `motion-detection-multiplier` will reduce the relative benefit of fleeing.
-
-## H9: Reaction time
-
-Longer prey reaction times will reduce survival, especially when predators begin close to prey.
-
----
+Six of the nine are framed around *when* hiding beats fleeing, with
+concealment quality as the thing being varied. The evidence says relative
+speed is the variable that decides it. That reframing is the study's main
+contribution, and it only became visible because the speed sweep went wider
+than the factorial's own window.
 
 # Important experimental cautions
 
@@ -2208,118 +2069,100 @@ Strategy X performed better under conditions Y and Z.
 
 # Implemented functionality
 
-The improved research prototype includes:
+## Model
 
-- predator and prey agents;
-- decentralized prey decisions;
+- predator and prey agents with decentralized prey decisions;
 - predator search and pursuit;
 - continuous patch-level environmental cover;
-- low, medium, and high target cover categories;
-- uniform, patchy, and mixed cover arrangements;
-- environment normalization toward comparable mean cover;
-- fixed still, hide, flee, and seek-cover policies;
-- an adaptive decision policy;
-- cover-dependent hiding;
-- movement-dependent detection;
-- environmental detection reduction;
-- reaction delay;
-- emergency fleeing;
-- local cover search;
-- simple cover reachability evaluation;
-- fixed experiment duration;
-- reproducible random seeds;
-- survival and capture metrics;
-- cumulative survival;
-- capture-time metrics;
-- strategy transition counters;
-- strategy decision proportions;
-- environmental cover metrics;
-- current strategy counts;
-- optional predator perception rings;
-- optional state labels;
-- safe live plotting when the expected plot is present;
-- optional sexual reproduction with maturity, cooldown, and carrying capacity;
-- policy inheritance so mixed-strategy runs carry selection pressure.
+- low, medium and high target cover categories;
+- uniform, patchy and mixed cover arrangements;
+- normalization toward a target mean cover, so that cover amount and cover
+  arrangement are separable experimental variables;
+- fixed still, hide, flee and seek-cover policies, plus an adaptive policy;
+- cover-dependent hiding, movement-dependent detection, environmental
+  detection reduction;
+- reaction delay, emergency fleeing, local cover search, cover reachability;
+- sexual reproduction with maturity, cooldown and carrying capacity;
+- policy inheritance, so mixed-policy runs carry selection pressure.
 
----
+## Experimental infrastructure
+
+- an Interface of 21 parameter widgets, 2 buttons, 12 monitors and 2 plots,
+  with no hard-coded parameter defaults in code and no unused sliders;
+- four BehaviorSpace experiments totalling 14,143 runs, stored in the model
+  file and runnable headless with no manual setup;
+- a 15-check self test, including regression tests for the two defects
+  described under [Self test](#self-test);
+- headless performance guards on drawing and plotting.
+
+## Measurement
+
+- survival and capture metrics, cumulative survival, capture-time metrics;
+- **founder-cohort reporters**, which stay valid as survival measures even
+  with reproduction enabled, because the founder cohort never grows;
+- **strategy exposure reporters** in agent-ticks alongside decision counts,
+  because detection risk accrues per tick rather than per decision;
+- `strategy-evenness`, a 0-to-1 Shannon evenness of the exposure mix;
+- **censoring-aware extinction timing**, so survival analysis can distinguish
+  a population that died from one that outlived the clock;
+- environmental cover metrics and current-state counts.
+
+## Analysis
+
+- a reproducible Python pipeline that regenerates every table and figure, and
+  the Results section itself, from the raw CSVs;
+- percentile bootstrap CIs, Cliff's delta, paired Wilcoxon on seed-matched
+  runs, Holm-corrected p-values, omega-squared variance decomposition,
+  Kaplan-Meier with right-censoring, log-rank tests.
 
 # Future work
 
-Potential improvements include:
+Interface construction, BehaviorSpace setup, CSV-friendly reporters,
+automated tests and the statistical analysis that earlier versions of this
+document listed here are implemented. What remains:
+
+## Experiments this design does not cover
+
+- **Add `seek-cover` as a fifth strategy level** (H5). It is one of the
+  model's four actions and currently untested as a fixed policy.
+- **Sweep `motion-detection-multiplier`** (H8) and
+  **`prey-reaction-time-setting`** (H9). Both are sliders held constant
+  throughout, and both hypotheses are stated but unanswered.
+- **Reproduction-enabled runs.** The fix described under
+  [Self test](#self-test) makes these meaningful for the first time; the
+  outcome to measure is the sustained population, not time to extinction.
 
 ## Model validation
 
-- Validate detection equations against relevant literature.
-- Justify parameter ranges.
-- Test alternate detection formulations.
-- Compare deterministic and probabilistic detection.
+- Validate the detection equation against literature. This is the most
+  important open item, because the hide-versus-flee answer turns on parameters
+  that are currently asserted rather than derived.
+- Justify parameter ranges from published predator-prey data.
+- Test a probabilistic detection model against the current deterministic
+  radius test.
 
-## Better experimental support
+## Adaptive policy calibration
 
-- Add the complete set of Interface controls.
-- Add BehaviorSpace experiments directly to the model.
-- Add automatic CSV-friendly reporters.
-- Add automated tests for environment means and reporter bounds.
+The policy is directionally correct but spends about three quarters of every
+run standing still, which is the worst available action. Worth trying:
 
-## Individual histories
-
-Record per-prey:
-
-- every strategy transition;
-- detection time;
-- pursuit time;
-- capture time;
-- cover at decision time;
-- predator distance at decision time;
-- hide and flee scores.
-
-## Improved adaptive policy
-
-Possible extensions include:
-
-- utility-based decision-making;
-- probabilistic choice;
-- reinforcement learning;
-- memory of previous outcomes;
-- limited prediction of predator movement.
-
-These should only be added if they improve the research question rather than adding unnecessary complexity.
+- lowering `minimum-decision-score`, which is what routes an agent to "still"
+  when neither hiding nor fleeing scores well;
+- re-deriving the hide and flee scores as commensurable quantities rather than
+  two separately constructed 0-to-1 numbers;
+- utility-based or probabilistic action choice;
+- memory of previous outcomes, and limited prediction of predator movement.
 
 ## Predator extensions
 
-Useful predator treatments might include:
-
-- random search only;
-- search plus pursuit;
-- memory-based search;
-- multiple detection capabilities.
-
-Avoid adding many predator types without a clear experiment.
+Memory-based search rather than a memoryless wander. The current predator
+never revisits productive areas, which is part of why fleeing is so strong: a
+prey that moves is genuinely hard for a memoryless searcher to reacquire.
 
 ## Environmental extensions
 
-Possible environmental improvements include:
-
-- bounded worlds;
-- obstacles;
-- movement costs through different terrain;
-- dynamic cover;
-- separate visual cover and physical obstruction;
-- controlled patch-size distributions.
-
-## Statistical analysis
-
-Recommended analysis outside NetLogo includes:
-
-- confidence intervals;
-- effect sizes;
-- paired comparisons using matched seeds;
-- regression models;
-- survival analysis;
-- response-surface plots;
-- strategy-boundary heatmaps.
-
----
+Bounded worlds, obstacles, movement costs, dynamic cover, and separating
+visual cover from physical obstruction.
 
 # Suggested report structure
 
@@ -2409,6 +2252,53 @@ The project can be summarized in one sentence:
 
 > We develop a multi-agent predator–prey simulation in which prey autonomously choose between remaining still, camouflage-based hiding, active escape, and seeking environmental cover, and investigate how quantified cover structure and predator–prey capabilities affect the survival advantage of each strategy.
 
-The animation is the visualization.
+The animation is the visualization. The project itself is the controlled
+experimental study conducted using the model.
 
-The project itself is the controlled experimental study conducted using the model.
+## What the study found
+
+Across 14,130 simulation runs in two experiments:
+
+1. **Strategy is the dominant factor** (omega squared = 0.42), followed by the
+   predator/prey speed ratio (0.20). Cover amount matters moderately (0.07).
+2. **Cover arrangement does not matter** once cover amount is controlled
+   (omega squared = -0.0002) — a clean null, interpretable only because the
+   model normalises realised cover to a target mean.
+3. **Fleeing dominates the region the factorial samples**, but the
+   hide/flee boundary is real and sits just outside it, at a predator/prey
+   speed ratio of 3.0 against a maximum sampled ratio of 2.5.
+4. **The adaptive policy reads the environment correctly but acts on it
+   badly**, spending three quarters of every run in the worst available
+   action. It is nonetheless the most robust against total collapse.
+5. **Two defects in the model changed conclusions**: ageing that advanced only
+   on ticks not spent reacting, and a reproduction guard that made the fixed
+   flee policy structurally sterile. See [Self test](#self-test).
+
+## Reproducing the study
+
+```bash
+# 1. Verify the model
+netlogo-headless.sh --model octoplus.nlogox --experiment self-test --table /dev/null
+
+# 2. Run the experiments (about 35 minutes on two cores)
+for e in main-factorial speed-boundary; do
+  netlogo-headless.sh --model octoplus.nlogox --experiment "$e" \
+    --table "results/$e.csv" --threads 2
+done
+
+# 3. Regenerate every table, figure and the Results section
+python3 analysis/run_analysis.py
+python3 write_results.py
+```
+
+## Repository layout
+
+```
+octoplus.nlogox            the model: code, Interface, 4 BehaviorSpace experiments
+README.md                  this document
+write_results.py           regenerates the Results section from the tables
+analysis/                  4 modules: loading, statistics, styling, the pipeline
+analysis/figures/          6 figures
+analysis/tables/           14 tables
+results/                   raw BehaviorSpace output, gzipped
+```

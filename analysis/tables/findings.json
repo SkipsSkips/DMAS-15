@@ -1,0 +1,94 @@
+{
+  "integrity_issues": [],
+  "overall_ranking": [
+    {
+      "strategy": "flee",
+      "n": 2430,
+      "survival_mean": 67.26543209876543,
+      "ci_lo": 65.90843621399176,
+      "ci_hi": 68.61015946502059,
+      "extinction_pct": 6.748971193415638
+    },
+    {
+      "strategy": "adaptive-dmas",
+      "n": 2430,
+      "survival_mean": 43.67901234567901,
+      "ci_lo": 42.16867283950617,
+      "ci_hi": 45.17901234567901,
+      "extinction_pct": 5.761316872427984
+    },
+    {
+      "strategy": "hide",
+      "n": 2430,
+      "survival_mean": 20.521604938271604,
+      "ci_lo": 19.66355452674897,
+      "ci_hi": 21.38477366255144,
+      "extinction_pct": 24.19753086419753
+    },
+    {
+      "strategy": "still",
+      "n": 2430,
+      "survival_mean": 4.308641975308642,
+      "ci_lo": 4.043184156378601,
+      "ci_hi": 4.573045267489712,
+      "extinction_pct": 54.44444444444444
+    }
+  ],
+  "variance_explained": [
+    {
+      "factor": "strategy",
+      "levels": 4,
+      "omega_squared": 0.4201421654277476
+    },
+    {
+      "factor": "pred/prey speed ratio",
+      "levels": 8,
+      "omega_squared": 0.19595585012553823
+    },
+    {
+      "factor": "pred_speed",
+      "levels": 3,
+      "omega_squared": 0.10421763547421377
+    },
+    {
+      "factor": "cover",
+      "levels": 3,
+      "omega_squared": 0.07415124899691662
+    },
+    {
+      "factor": "prey_speed",
+      "levels": 3,
+      "omega_squared": 0.07373181536471073
+    },
+    {
+      "factor": "arrangement",
+      "levels": 3,
+      "omega_squared": -0.0001579496383526391
+    }
+  ],
+  "boundary_near_zero_cells": 1,
+  "adaptive_cover_correlation": {
+    "exp_hide": 0.8119802035194027,
+    "exp_flee": -0.7278444570394169,
+    "exp_still": -0.19535093322623626
+  },
+  "best_strategy_share": [
+    {
+      "strategy": "flee",
+      "pct_of_cells_where_best": 79.21810699588477
+    },
+    {
+      "strategy": "adaptive-dmas",
+      "pct_of_cells_where_best": 13.415637860082304
+    },
+    {
+      "strategy": "hide",
+      "pct_of_cells_where_best": 5.432098765432099
+    },
+    {
+      "strategy": "still",
+      "pct_of_cells_where_best": 1.934156378600823
+    }
+  ],
+  "hide_wins_speed_ratio_threshold": 3.0
+}

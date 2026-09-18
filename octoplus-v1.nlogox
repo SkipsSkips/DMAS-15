@@ -417,7 +417,7 @@ end
     <slider x="5" step="1" y="132" max="10" width="220" display="initial-predators" height="50" min="0" direction="Horizontal" default="3.0" variable="initial-predators" units="predators"></slider>
     <note x="5" y="190" backgroundDark="0" fontSize="11" width="220" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">SPEED AND SIGHT</note>
     <slider x="5" step="0.05" y="212" max="2" width="220" display="prey-speed" height="50" min="0" direction="Horizontal" default="0.6" variable="prey-speed" units="patches/tick"></slider>
-    <slider x="5" step="0.05" y="264" max="2" width="220" display="predator-speed" height="50" min="0" direction="Horizontal" default="0.8" variable="predator-speed" units="patches/tick"></slider>
+    <slider x="5" step="0.05" y="264" max="2" width="220" display="predator-speed" height="50" min="0" direction="Horizontal" default="0.4" variable="predator-speed" units="patches/tick"></slider>
     <slider x="5" step="0.5" y="316" max="25" width="220" display="detection-radius" height="50" min="1" direction="Horizontal" default="10.0" variable="detection-radius" units="patches"></slider>
     <note x="5" y="374" backgroundDark="0" fontSize="11" width="220" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ENVIRONMENT</note>
     <slider x="5" step="0.05" y="396" max="1" width="220" display="cover-amount" height="50" min="0" direction="Horizontal" default="0.45" variable="cover-amount"></slider>

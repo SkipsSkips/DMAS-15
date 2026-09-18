@@ -27,6 +27,10 @@
 globals [
   starting-prey
   total-captures
+
+  ;; True while predator perception rings are on the drawing layer, so
+  ;; that turning the switch off erases them exactly once.
+  rings-drawn?
 ]
 
 patches-own [
@@ -59,8 +63,10 @@ to setup
 
   set starting-prey count octopuses
   set total-captures 0
+  set rings-drawn? false
 
   reset-ticks
+  render-predator-perception
 end
 
 ;; Two kinds of environment: cover spread evenly everywhere, or cover
@@ -136,6 +142,8 @@ to go
   ]
 
   tick
+
+  render-predator-perception
 end
 
 ;; ====================================================================
@@ -186,19 +194,38 @@ to-report nearest-predator
 end
 
 to update-appearance
+  set label ""
+  set label-color white
+
   if is-hidden? [
-    ;; A hidden octopus takes on the colour of its patch.
+    ;; A hidden octopus takes on the colour of its patch, which is the
+    ;; whole point of hiding -- but it also makes it invisible on
+    ;; screen. The label is how you can still see where it is.
     set color pcolor
     set size 0.7
+
+    if show-state-labels? [
+      set label "HIDE"
+      set label-color yellow
+    ]
+
     stop
   ]
 
   ifelse is-moving? [
     set color yellow
     set size 1.25
+
+    if show-state-labels? [
+      set label "FLEE"
+    ]
   ] [
     set color orange
     set size 1.1
+
+    if show-state-labels? [
+      set label "STILL"
+    ]
   ]
 end
 
@@ -267,6 +294,96 @@ to-report visible-to? [pred]
 end
 
 ;; ====================================================================
+;; PREDATOR PERCEPTION RINGS
+;;
+;; Two rings per predator:
+;;
+;;   red   the unmodified detection radius
+;;   cyan  that radius reduced by the cover on the predator's own patch
+;;
+;; The cyan ring is a reference only. Whether a particular octopus is
+;; actually seen also depends on ITS cover, and on whether it is hiding
+;; or moving, so a prey can sit inside the cyan ring unseen.
+;;
+;; Drawing restores each predator's exact position and heading, and runs
+;; inside with-local-randomness so it consumes no random numbers, so
+;; the rings cannot change how a run unfolds. See the note below.
+;; ====================================================================
+
+to render-predator-perception
+  ifelse show-predator-radii? [
+    ;; with-local-randomness matters here, and the reason is not
+    ;; obvious: `ask` on an agentset SHUFFLES that agentset using the
+    ;; random number generator. Drawing the rings would therefore
+    ;; consume random numbers and change every predator's later wander
+    ;; angles, so simply switching the rings on would alter the run.
+    ;; with-local-randomness gives the block its own generator and puts
+    ;; the main one back afterwards, which makes the rings genuinely
+    ;; decorative.
+    with-local-randomness [
+      clear-drawing
+
+      ask predators [
+        draw-perception-ring detection-radius red
+        draw-perception-ring reference-detection-radius cyan
+      ]
+    ]
+
+    set rings-drawn? true
+  ] [
+    ;; Erase once when the switch is turned off, then leave the
+    ;; drawing layer alone.
+    if rings-drawn? [
+      clear-drawing
+      set rings-drawn? false
+    ]
+  ]
+end
+
+;; The predator's detection radius as reduced by the cover it is
+;; standing on.
+to-report reference-detection-radius
+  let local-cover
+    max (list 0 (min (list 1 cover-density)))
+
+  let modifier
+    max (list 0 (1 - local-cover * cover-effect))
+
+  report detection-radius * modifier
+end
+
+to draw-perception-ring [radius ring-colour]
+  if radius <= 0 [
+    stop
+  ]
+
+  let saved-x xcor
+  let saved-y ycor
+  let saved-heading heading
+  let saved-colour color
+
+  pen-up
+  set color ring-colour
+  set heading 0
+  forward radius
+  set heading 90
+  pen-down
+
+  let segments 72
+  let segment-length (2 * pi * radius) / segments
+
+  repeat segments [
+    forward segment-length
+    right (360 / segments)
+  ]
+
+  pen-up
+  setxy saved-x saved-y
+  set heading saved-heading
+  set color saved-colour
+end
+
+;; ====================================================================
 ;; MEASUREMENTS
 ;;
 ;; Three numbers, read off the Interface at the end of a run. This is
@@ -327,6 +444,8 @@ end
       </pen>
     </plot>
     <note x="820" y="455" backgroundDark="0" fontSize="11" width="430" markdown="false" height="52" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ONE RUN IS ONE SAMPLE. The model is random, so this curve is not evidence on its own. Repeating runs under matched conditions is what version 2 adds.</note>
+    <switch x="820" y="520" height="40" on="true" variable="show-predator-radii?" width="210" display="show-predator-radii?"></switch>
+    <switch x="1040" y="520" height="40" on="true" variable="show-state-labels?" width="210" display="show-state-labels?"></switch>
   </widgets>
   <info></info>
   <turtleShapes>

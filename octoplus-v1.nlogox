@@ -292,29 +292,40 @@ to-report mean-cover-on-map
 end
 ]]></code>
   <widgets>
+    <view x="240" wrappingAllowedX="true" y="8" frameRate="30.0" minPycor="-25" height="565" showTickCounter="true" patchSize="11.0" fontSize="10" wrappingAllowedY="true" width="565" tickCounterLabel="ticks" maxPycor="25" updateMode="1" maxPxcor="25" minPxcor="-25"></view>
     <button x="5" y="8" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="105" display="setup">setup</button>
     <button x="115" y="8" height="40" disableUntilTicks="true" forever="true" kind="Observer" width="105" display="go">go</button>
     <note x="5" y="58" backgroundDark="0" fontSize="11" width="220" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">POPULATION</note>
-    <slider x="5" step="1" y="80" max="200" width="220" display="initial-prey" height="50" min="1" direction="Horizontal" default="40" variable="initial-prey" units="octopuses"></slider>
-    <slider x="5" step="1" y="132" max="10" width="220" display="initial-predators" height="50" min="0" direction="Horizontal" default="3" variable="initial-predators" units="predators"></slider>
+    <slider x="5" step="1" y="80" max="200" width="220" display="initial-prey" height="50" min="1" direction="Horizontal" default="40.0" variable="initial-prey" units="octopuses"></slider>
+    <slider x="5" step="1" y="132" max="10" width="220" display="initial-predators" height="50" min="0" direction="Horizontal" default="3.0" variable="initial-predators" units="predators"></slider>
     <note x="5" y="190" backgroundDark="0" fontSize="11" width="220" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">SPEED AND SIGHT</note>
     <slider x="5" step="0.05" y="212" max="2" width="220" display="prey-speed" height="50" min="0" direction="Horizontal" default="0.6" variable="prey-speed" units="patches/tick"></slider>
     <slider x="5" step="0.05" y="264" max="2" width="220" display="predator-speed" height="50" min="0" direction="Horizontal" default="0.8" variable="predator-speed" units="patches/tick"></slider>
-    <slider x="5" step="0.5" y="316" max="25" width="220" display="detection-radius" height="50" min="1" direction="Horizontal" default="10" variable="detection-radius" units="patches"></slider>
+    <slider x="5" step="0.5" y="316" max="25" width="220" display="detection-radius" height="50" min="1" direction="Horizontal" default="10.0" variable="detection-radius" units="patches"></slider>
     <note x="5" y="374" backgroundDark="0" fontSize="11" width="220" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ENVIRONMENT</note>
     <slider x="5" step="0.05" y="396" max="1" width="220" display="cover-amount" height="50" min="0" direction="Horizontal" default="0.45" variable="cover-amount"></slider>
     <slider x="5" step="0.05" y="448" max="1" width="220" display="cover-effect" height="50" min="0" direction="Horizontal" default="0.8" variable="cover-effect"></slider>
     <switch x="5" y="500" height="40" on="false" variable="patchy-cover?" width="220" display="patchy-cover?"></switch>
     <note x="5" y="548" backgroundDark="0" fontSize="11" width="220" markdown="false" height="18" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">PREY STRATEGY</note>
-    <chooser x="5" y="570" height="60" variable="prey-strategy" current="2" width="220" display="prey-strategy"><choice type="string" value="still"></choice><choice type="string" value="hide"></choice><choice type="string" value="flee"></choice></chooser>
+    <chooser x="5" y="570" height="60" variable="prey-strategy" current="1" width="220" display="prey-strategy">
+      <choice type="string" value="still"></choice>
+      <choice type="string" value="hide"></choice>
+      <choice type="string" value="flee"></choice>
+    </chooser>
     <note x="5" y="638" backgroundDark="0" fontSize="10" width="220" markdown="false" height="34" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">One strategy for the whole population. Per-agent decisions come in version 2.</note>
-    <view x="240" wrappingAllowedX="true" y="8" frameRate="30.0" minPycor="-25" height="565" showTickCounter="true" patchSize="11.0" fontSize="10" wrappingAllowedY="true" width="565" tickCounterLabel="ticks" maxPycor="25" updateMode="1" maxPxcor="25" minPxcor="-25"></view>
     <monitor x="820" precision="0" y="8" height="60" fontSize="11" width="140" display="prey alive">prey-alive</monitor>
     <monitor x="965" precision="1" y="8" height="60" fontSize="11" width="140" display="survival %">survival-percent</monitor>
     <monitor x="1110" precision="0" y="8" height="60" fontSize="11" width="140" display="captures">total-captures</monitor>
     <monitor x="820" precision="3" y="73" height="60" fontSize="11" width="140" display="mean cover">mean-cover-on-map</monitor>
     <monitor x="965" precision="0" y="73" height="60" fontSize="11" width="140" display="ticks">ticks</monitor>
-    <plot x="820" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="octopuses" y="145" xMin="0.0" height="300" legend="true" xMax="100.0" yMin="0.0" width="430" xAxis="ticks" display="Prey Alive"><setup></setup><update></update><pen interval="1.0" mode="0" display="Prey" color="-23296" legend="true"><setup></setup><update>plot count octopuses</update></pen></plot>
+    <plot x="820" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="octopuses" y="145" xMin="0.0" height="300" legend="true" xMax="100.0" yMin="0.0" width="430" xAxis="ticks" display="Prey Alive">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="Prey" color="-23296" legend="true">
+        <setup></setup>
+        <update>plot count octopuses</update>
+      </pen>
+    </plot>
     <note x="820" y="455" backgroundDark="0" fontSize="11" width="430" markdown="false" height="52" textColorDark="-1" textColorLight="-15461356" backgroundLight="0">ONE RUN IS ONE SAMPLE. The model is random, so this curve is not evidence on its own. Repeating runs under matched conditions is what version 2 adds.</note>
   </widgets>
   <info></info>

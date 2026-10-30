@@ -1,0 +1,65 @@
+;; Metrics: run statistics and the reporters BehaviorSpace records.
+
+to reset-metrics
+  set total-births 0
+  set total-captures 0
+  set extinction-tick -1
+  set population-history []
+  set action-ticks [0 0 0 0 0]
+end
+
+to-report action-names
+  report ["forage" "still" "hide" "flee" "seek-cover"]
+end
+
+;; Called by each prey that acts this tick.
+to record-action
+  let i position active-strategy action-names
+  set action-ticks replace-item i action-ticks (item i action-ticks + 1)
+end
+
+;; Called once per tick, after predation.
+to record-population
+  set population-history lput count octopuses population-history
+  if extinction-tick = -1 and not any? octopuses [ set extinction-tick ticks ]
+end
+
+;; Tick the population died out, or -1 if it survived.
+to-report extinction-time
+  report extinction-tick
+end
+
+;; Share of living prey that carry this policy.
+to-report policy-share [a-policy]
+  if not any? octopuses [ report 0 ]
+  report count octopuses with [policy = a-policy] / count octopuses
+end
+
+;; Share of all prey-ticks spent doing this action.
+to-report time-share [action]
+  if sum action-ticks = 0 [ report 0 ]
+  report item (position action action-names) action-ticks / sum action-ticks
+end
+
+to-report late-population
+  let history population-history
+  ;; after extinction the population stays at zero for the rest of the run
+  if extinction-tick >= 0 [
+    set history sentence history n-values max (list 0 (experiment-duration - length history)) [0]
+  ]
+  let n length history
+  report sublist history floor (n / 2) n
+end
+
+;; Mean population over the second half of the run.
+to-report late-mean-population
+  if empty? late-population [ report 0 ]
+  report mean late-population
+end
+
+;; Coefficient of variation over the second half: 0 = flat, higher = bigger swings.
+to-report late-population-cv
+  let late late-population
+  if length late < 2 or mean late = 0 [ report 0 ]
+  report standard-deviation late / mean late
+end

@@ -1,0 +1,67 @@
+;; Environment: generate a cover pattern, then rescale it so its mean hits the target.
+
+to setup-environment
+  set target-cover-mean cover-target-for-category
+  if cover-arrangement = "uniform" [ setup-uniform-cover ]
+  if cover-arrangement = "patchy" [ setup-patchy-cover ]
+  normalize-cover-to-target target-cover-mean
+  clamp-cover-values
+  set realized-cover-mean average-world-cover
+  recolor-environment
+end
+
+to-report cover-target-for-category
+  if cover-amount-category = "low" [ report cover-target-low ]
+  if cover-amount-category = "high" [ report cover-target-high ]
+  report cover-target-medium
+end
+
+;; Small noise around the target everywhere.
+to setup-uniform-cover
+  ask patches [ set cover-density clamp-value (target-cover-mean + random-normal 0 uniform-cover-noise) 0 1 ]
+end
+
+;; Almost bare background plus dense clusters.
+to setup-patchy-cover
+  ask patches [ set cover-density random-float patchy-background-noise ]
+  add-cover-clusters
+end
+
+;; Adds cover around random centres, fading linearly to zero at reef-cluster-radius.
+to add-cover-clusters
+  ask n-of (min (list reef-cluster-count count patches)) patches [
+    let center self
+    ask patches in-radius reef-cluster-radius [
+      let strength max (list 0 (1 - distance center / max (list 0.1 reef-cluster-radius)))
+      set cover-density cover-density + strength * (cluster-base-strength + random-float cluster-random-strength)
+    ]
+  ]
+end
+
+;; Moves every patch proportionally toward 1 (or 0) so the mean hits the target, keeping the pattern.
+to normalize-cover-to-target [target-mean]
+  let target clamp-value target-mean 0 1
+  let current mean [cover-density] of patches
+  if current < target and current < 1 [
+    let k (target - current) / (1 - current)
+    ask patches [ set cover-density cover-density + (1 - cover-density) * k ]
+  ]
+  if current > target and current > 0 [
+    let k target / current
+    ask patches [ set cover-density cover-density * k ]
+  ]
+end
+
+to clamp-cover-values
+  ask patches [ set cover-density clamp-value cover-density 0 1 ]
+end
+
+to recolor-environment
+  ask patches [
+    set pcolor ifelse-value cover-density < 0.15 [ 37 ] [ scale-color green cover-density -0.10 1.10 ]
+  ]
+end
+
+to-report average-world-cover
+  report mean [cover-density] of patches
+end

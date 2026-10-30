@@ -1,0 +1,30 @@
+;; Prey births: a per-tick chance as in Wolf Sheep Predation (Wilensky, 1997),
+;; slowing to zero as the population nears carrying-capacity.
+;; Offspring inherit policy and traits, so the strategy mix can evolve. They settle at a random
+;; place, because real young octopuses drift away as larvae before they settle.
+
+to try-reproduce
+  if not enable-reproduction? [ stop ]
+  ;; only foraging prey breed: time spent alarmed is time not spent feeding (the foraging-risk trade-off)
+  if active-strategy != "forage" [ stop ]
+
+  let crowding count octopuses / carrying-capacity
+  if random-float 1 < birth-chance * (1 - crowding) [
+    hatch 1 [
+      mutate-inherited-traits
+      ;; octopus larvae drift in the plankton for weeks, so recruits settle away from the parent
+      move-to one-of patches
+      set home-patch patch-here
+      set reaction-timer prey-reaction-time-setting
+      set calm-timer 0
+      set jet-left max-jet-time
+      set is-reacting? false
+      set is-hidden? false
+      set is-moving? false
+      set active-strategy "forage"
+      rt random 360
+      update-octopus-visuals
+    ]
+    set total-births total-births + 1
+  ]
+end

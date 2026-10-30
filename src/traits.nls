@@ -1,0 +1,16 @@
+;; Individual traits: each is base x (1 + normal noise), so trait-variation 0.25 means ~25% spread.
+
+to assign-individual-traits
+  if trait-variation > 0 [ ask octopuses [ vary-traits trait-variation ] ]
+end
+
+;; Offspring procedure: inherited traits mutate by a fraction of the starting spread.
+to mutate-inherited-traits
+  if trait-variation > 0 [ vary-traits trait-variation * offspring-mutation-fraction ]
+end
+
+to vary-traits [sd]
+  set prey-speed max (list 0 (prey-speed * (1 + random-normal 0 sd)))
+  set camouflage clamp-value (camouflage * (1 + random-normal 0 sd)) 0 1
+  set detection-threshold max (list 0 (detection-threshold * (1 + random-normal 0 sd)))
+end

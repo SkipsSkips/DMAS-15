@@ -1,0 +1,101 @@
+;; Display: colours, labels, perception rings and live plots. No effect on results.
+
+to update-octopus-visuals
+  set label ""
+  set label-color white
+  (ifelse
+    is-reacting? [
+      set color magenta
+      set size 1.2
+      set label word "WAIT " reaction-timer
+    ]
+    is-hidden? [
+      set color pcolor
+      set size 0.72
+      set label "HIDE" set label-color yellow
+    ]
+    active-strategy = "flee" [
+      set color yellow
+      set size 1.25
+      set label "FLEE"
+    ]
+    active-strategy = "seek-cover" [
+      set color cyan
+      set size 1.05
+      set label "SEEK"
+    ]
+    active-strategy = "still" [
+      set color white
+      set size 1
+      set label "STILL"
+    ]
+    [
+      ;; foraging
+      set color orange
+      set size 1
+      set label "FORAGE"
+    ])
+end
+
+to update-predator-search-visual
+  set label "SEARCH"
+  set label-color white
+end
+
+to update-predator-chase-visual
+  set label "CHASE"
+  set label-color yellow
+end
+
+;; Red: base detection radius. Cyan: radius after cover on the predator's patch.
+;; with-local-randomness: asking predators shuffles them with the model's random numbers,
+;; which would otherwise change the results.
+to render-predator-perception
+  ;; BehaviorSpace runs show nothing, so skip the drawing there to keep experiments fast
+  if behaviorspace-run-number > 0 [ stop ]
+  clear-drawing
+  with-local-randomness [
+    ask predators [
+      draw-perception-ring detection-radius red
+      draw-perception-ring (detection-radius * max (list 0 (1 - cover-density * cover-impact-strength))) cyan
+    ]
+  ]
+end
+
+;; Traces a circle with the turtle's pen, then puts the turtle back.
+to draw-perception-ring [radius ring-color]
+  let saved-heading heading
+  set heading 0
+  if radius <= 0 or not can-move? radius [ set heading saved-heading stop ]
+  let saved-color color
+  let saved-x xcor
+  let saved-y ycor
+  pen-up
+  set color ring-color
+  fd radius
+  set heading 90
+  pen-down
+  repeat 72 [ fd 2 * pi * radius / 72 rt 5 ]
+  pen-up
+  setxy saved-x saved-y
+  set heading saved-heading
+  set color saved-color
+end
+
+to update-live-plots
+  ;; what prey are doing this tick; reacting prey keep their previous action, so they are counted apart
+  set-current-plot "Prey by Action"
+  set-current-plot-pen "reacting"
+  plotxy ticks count octopuses with [is-reacting?]
+  foreach action-names [ a ->
+    set-current-plot-pen a
+    plotxy ticks count octopuses with [active-strategy = a and not is-reacting?]
+  ]
+  set-current-plot "Population and Predation"
+  set-current-plot-pen "Prey"
+  plotxy ticks count octopuses
+  set-current-plot-pen "Captures"
+  plotxy ticks total-captures
+  set-current-plot-pen "Births"
+  plotxy ticks total-births
+end

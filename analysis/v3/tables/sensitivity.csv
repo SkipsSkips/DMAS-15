@@ -1,0 +1,25 @@
+case,env,n_per_policy,best,adaptive-dmas,flee,hide,still,seek-cover,experimental-assigned,kendall_tau_vs_default
+alarm-radius_10,"patchy, medium",10,hide,124.963,2.494,128.256,57.374,91.973,31.396,0.200
+alarm-radius_10,"uniform, low",10,still,19.436,0.000,20.035,28.712,3.342,0.052,-0.333
+alarm-radius_2.5,"patchy, medium",10,adaptive-dmas,139.007,123.266,128.256,57.374,112.726,95.983,0.867
+alarm-radius_2.5,"uniform, low",10,adaptive-dmas,57.652,25.012,20.035,28.712,3.342,8.939,0.467
+alarm-radius_5,"patchy, medium",10,adaptive-dmas,137.224,78.880,128.256,57.374,122.801,99.807,0.600
+alarm-radius_5,"uniform, low",10,still,27.323,0.927,20.035,28.712,3.342,6.934,-0.067
+calm-down-time_10,"patchy, medium",10,flee,140.920,164.165,125.584,79.853,126.315,132.160,0.467
+calm-down-time_10,"uniform, low",10,flee,66.677,110.107,34.079,35.864,24.669,67.655,0.867
+calm-down-time_40,"patchy, medium",10,adaptive-dmas,111.525,90.324,84.750,60.492,94.643,86.687,0.333
+calm-down-time_40,"uniform, low",10,experimental-assigned,11.602,16.385,8.903,20.305,6.395,22.295,0.467
+default,"patchy, medium",10,adaptive-dmas,138.454,124.092,128.256,57.374,112.726,120.828,1.000
+default,"uniform, low",10,flee,57.645,77.504,20.035,28.712,3.342,41.332,1.000
+handling-time_10,"patchy, medium",10,adaptive-dmas,57.684,1.566,22.233,0.251,26.465,14.570,0.467
+handling-time_10,"uniform, low",10,adaptive-dmas,0.000,0.000,0.000,0.000,0.000,0.000,
+handling-time_30,"patchy, medium",10,experimental-assigned,166.029,189.936,170.593,164.685,174.161,190.053,-0.067
+handling-time_30,"uniform, low",10,flee,149.251,179.962,148.124,158.674,165.925,168.824,0.333
+hide-detection-multiplier_0.05,"patchy, medium",10,hide,141.920,136.882,155.918,71.132,110.289,103.196,0.733
+hide-detection-multiplier_0.05,"uniform, low",10,flee,50.585,65.424,14.481,27.125,6.767,23.127,0.867
+hide-detection-multiplier_0.3,"patchy, medium",10,adaptive-dmas,131.945,89.722,125.779,71.132,111.604,103.069,0.600
+hide-detection-multiplier_0.3,"uniform, low",10,adaptive-dmas,50.254,29.867,18.143,27.125,6.767,34.520,0.733
+motion-detection-multiplier_1.0,"patchy, medium",10,adaptive-dmas,155.639,151.766,128.256,57.374,120.230,140.445,0.733
+motion-detection-multiplier_1.0,"uniform, low",10,flee,62.691,109.860,69.284,33.013,9.259,83.078,0.600
+motion-detection-multiplier_2.0,"patchy, medium",10,adaptive-dmas,69.221,60.035,29.386,25.829,57.325,41.716,0.467
+motion-detection-multiplier_2.0,"uniform, low",10,flee,49.806,85.611,24.615,28.812,17.142,22.794,0.733

@@ -1,0 +1,189 @@
+;; Prey: setup, perception, strategy selection, foraging and the four anti-predator actions.
+;; A prey that has not noticed a predator forages. Its policy (still, hide, flee, seek-cover
+;; or adaptive) only decides what it does once a predator is inside its detection range.
+
+to setup-octopuses
+  create-octopuses initial-octopuses [
+    setxy random-xcor random-ycor
+    set shape "bug"
+    set color orange
+    set size 1.1
+    ;; base traits; assign-individual-traits varies them when trait-variation > 0
+    set prey-speed prey-speed-setting
+    set camouflage 1 - hide-detection-multiplier
+    set detection-threshold threat-awareness-radius
+    set home-patch patch-here
+    set reaction-timer prey-reaction-time-setting
+    set calm-timer 0
+    set jet-left max-jet-time
+    set is-reacting? false
+    set is-hidden? false
+    set is-moving? false
+    set active-strategy "forage"
+    ifelse octopus-strategy-mode = "experimental-assigned" [
+      set policy one-of ["hide" "flee" "still" "seek-cover"]
+    ] [
+      set policy octopus-strategy-mode
+    ]
+    update-octopus-visuals
+  ]
+end
+
+to execute-prey-logic
+  if not (active-strategy = "flee" and is-moving?) [
+    set jet-left min (list max-jet-time (jet-left + jet-recovery-rate))
+  ]
+  let nearest-threat nearest-predator
+  let threat-present? threat-is-relevant? nearest-threat
+
+  ;; social alarm: a neighbour jetting away in view means danger, even if the predator is not seen
+  if social-alarm? and not threat-present? [
+    if any? other octopuses in-radius alarm-radius with [active-strategy = "flee" and is-moving?] [
+      set calm-timer calm-down-time
+    ]
+  ]
+
+  ifelse threat-present? [
+    ;; stay alarmed for calm-down-time ticks after the predator is last seen
+    set calm-timer calm-down-time
+    ;; reaction delay: a foraging prey that has just noticed a predator stops while it assesses it
+    if reaction-timer > 0 [
+      set reaction-timer reaction-timer - 1
+      set is-reacting? true
+      set is-hidden? false
+      set is-moving? false
+      update-octopus-visuals
+      stop
+    ]
+  ] [
+    if calm-timer > 0 [ set calm-timer calm-timer - 1 ]
+  ]
+  set is-reacting? false
+
+  ifelse calm-timer > 0 [
+    ;; alarmed: use the anti-predator policy. Actions only see a predator inside the detection range.
+    ;; An alarmed prey does not stop to assess again if the predator reappears.
+    set reaction-timer 0
+    select-active-strategy nearest-threat
+    let visible-threat nobody
+    if threat-present? [ set visible-threat nearest-threat ]
+    if active-strategy = "hide" [ perform-hide ]
+    if active-strategy = "still" [ perform-still ]
+    if active-strategy = "flee" [ perform-flee visible-threat ]
+    if active-strategy = "seek-cover" [ perform-seek-cover visible-threat ]
+  ] [
+    ;; calm: forage, and need a fresh assessment the next time a predator appears
+    set reaction-timer prey-reaction-time-setting
+    set active-strategy "forage"
+    perform-forage
+  ]
+
+  record-action
+  update-octopus-visuals
+  try-reproduce
+end
+
+to-report nearest-predator
+  if not any? predators [ report nobody ]
+  report min-one-of predators [distance myself]
+end
+
+to-report threat-is-relevant? [threat]
+  if threat = nobody [ report false ]
+  report distance threat <= detection-threshold
+end
+
+to select-active-strategy [threat]
+  ifelse policy = "adaptive-dmas" [
+    evaluate-adaptive-strategy threat
+  ] [
+    set active-strategy policy
+  ]
+end
+
+;; Normal behaviour: a slow crawl with pauses, preferring cover and staying near home.
+to perform-forage
+  set is-hidden? false
+  ;; pausing to probe a crevice: not moving, so not more visible
+  if random-float 1 < forage-pause-chance [
+    set is-moving? false
+    stop
+  ]
+  ifelse distance home-patch > home-range-radius [
+    face home-patch
+  ] [
+    choose-forage-heading
+  ]
+  set is-moving? true
+  safe-forward crawl-speed
+end
+
+;; Correlated random walk: turn left, keep going or turn right, weighted by the cover one metre
+;; ahead. Bare ground weighs open-ground-weight; full cover weighs 1 + open-ground-weight.
+to choose-forage-heading
+  let turns [-45 0 45]
+  let weights map [a -> forage-weight (patch-right-and-ahead a 1)] turns
+  let pick random-float sum weights
+  let i 0
+  while [pick >= item i weights and i < length turns - 1] [
+    set pick pick - item i weights
+    set i i + 1
+  ]
+  rt item i turns
+end
+
+to-report forage-weight [a-patch]
+  if a-patch = nobody [ report 0 ]  ;; world edge (only in a non-wrapping world)
+  report open-ground-weight + [cover-density] of a-patch
+end
+
+to perform-hide
+  set is-hidden? true
+  set is-moving? false
+end
+
+to perform-still
+  set is-hidden? false
+  set is-moving? false
+end
+
+;; Jet away while jet time lasts; when spent, or with no predator in sight, camouflage in place.
+to perform-flee [threat]
+  ifelse threat != nobody and jet-left >= 1 [
+    set is-hidden? false
+    set is-moving? true
+    face threat
+    rt 180
+    safe-forward prey-speed
+    set jet-left jet-left - 1
+  ] [
+    set active-strategy "hide"
+    perform-hide
+  ]
+end
+
+;; Move toward the best nearby cover, hide once there, flee if it can't be reached in time.
+to perform-seek-cover [threat]
+  let target-patch best-cover-patch
+  if cover-density >= minimum-cover-target [
+    set active-strategy "hide"
+    set is-hidden? true
+    set is-moving? false
+    stop
+  ]
+  ifelse useful-cover-target? target-patch [
+    ifelse cover-target-is-reachable? target-patch threat [
+      set is-hidden? false
+      set is-moving? true
+      face target-patch
+      safe-forward prey-speed
+    ] [
+      set active-strategy "flee"
+      perform-flee threat
+    ]
+  ] [
+    set active-strategy "still"
+    set is-hidden? false
+    set is-moving? false
+  ]
+end

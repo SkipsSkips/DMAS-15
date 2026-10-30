@@ -1,0 +1,37 @@
+;; Adaptive policy, after Broom & Ruxton (2005): stay hidden until discovered, then run.
+;;   1. being chased (the predator is charging at it) and jet time left -> flee
+;;   2. clearly better cover reachable before the predator gets there -> seek cover
+;;   3. otherwise -> hide
+
+to evaluate-adaptive-strategy [threat]
+  (ifelse
+    being-chased-by? threat and jet-left >= 1 [ set active-strategy "flee" ]
+    better-cover-reachable? threat [ set active-strategy "seek-cover" ]
+    [ set active-strategy "hide" ])
+end
+
+to-report being-chased-by? [threat]
+  report threat != nobody and [target-prey] of threat = self
+end
+
+to-report better-cover-reachable? [threat]
+  let target-patch best-cover-patch
+  report useful-cover-target? target-patch and cover-target-is-reachable? target-patch threat
+end
+
+to-report best-cover-patch
+  report max-one-of (patches in-radius seek-cover-radius) [cover-density]
+end
+
+;; Worth moving to: good enough cover, and clearly better than here.
+to-report useful-cover-target? [target-patch]
+  let target-cover [cover-density] of target-patch
+  report target-cover >= minimum-cover-target and target-cover >= cover-density + minimum-cover-improvement
+end
+
+;; Rough estimate: can this prey get there before the predator reaches it?
+to-report cover-target-is-reachable? [target-patch threat]
+  if threat = nobody [ report true ]
+  if prey-speed <= 0 [ report false ]
+  report distance target-patch / prey-speed < distance threat / max (list 0.01 [pred-speed] of threat)
+end

@@ -1,0 +1,52 @@
+;; Predators: setup, search and chase, and the detection rule.
+
+to setup-predators
+  create-predators initial-predators [
+    setxy random-xcor random-ycor
+    set shape "fish"
+    set color red
+    set size 1.8
+    set detection-radius predator-detection-radius-setting
+    set pred-speed predator-speed-setting
+    set target-prey nobody
+    set handling-timer 0
+    update-predator-search-visual
+  ]
+end
+
+;; Chase the nearest visible prey, otherwise wander at search speed. After a capture, eat first.
+to execute-predator-logic
+  if handling-timer > 0 [
+    set handling-timer handling-timer - 1
+    stop
+  ]
+  let visible-prey octopuses with [is-detected-by? myself]
+
+  ifelse any? visible-prey [
+    set target-prey min-one-of visible-prey [distance myself]
+    update-predator-chase-visual
+    face target-prey
+    safe-forward min (list pred-speed (distance target-prey))
+    if distance target-prey <= capture-distance [
+      set total-captures total-captures + 1
+      ask target-prey [ die ]
+      set target-prey nobody
+      set handling-timer handling-time
+    ]
+  ] [
+    set target-prey nobody
+    update-predator-search-visual
+    rt (random-float (2 * predator-wander-angle) - predator-wander-angle)
+    safe-forward (pred-speed * predator-search-speed-factor)
+  ]
+end
+
+;; Prey procedure. radius = base * (1 - cover * impact) * hiding * motion
+to-report is-detected-by? [pred]
+  let local-cover clamp-value cover-density 0 1
+  let radius [detection-radius] of pred
+  set radius radius * max (list 0 (1 - local-cover * cover-impact-strength))
+  if is-hidden? [ set radius radius * (1 - local-cover * camouflage) ]
+  if is-moving? [ set radius radius * motion-detection-multiplier ]
+  report distance pred <= radius
+end

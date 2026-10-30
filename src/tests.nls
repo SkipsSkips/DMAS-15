@@ -1,0 +1,199 @@
+;; Self test, run headless through the self-test experiment.
+
+to run-self-test
+  let failures 0
+  output-print "=== octoplus self test ==="
+
+  foreach ["low" "medium" "high"] [ a-category ->
+    foreach ["uniform" "patchy"] [ an-arrangement ->
+      set cover-amount-category a-category
+      set cover-arrangement an-arrangement
+      setup
+      let deviation abs (realized-cover-mean - cover-target-for-category)
+      set failures failures + check (word "cover mean " a-category "/" an-arrangement)
+        (deviation <= 0.02) (word "off by " precision deviation 4)
+    ]
+  ]
+
+  set cover-amount-category "medium"
+  set cover-arrangement "patchy"
+  setup
+  repeat 100 [ go ]
+  set failures failures + check "time shares sum to 1"
+    (sum action-ticks = 0 or abs (sum map [a -> time-share a] action-names - 1) < 0.00000001) ""
+  set failures failures + check "prey accounted for"
+    (count octopuses = initial-octopuses + total-births - total-captures) ""
+
+  set failures failures + check "policy shares sum to 1" (policy-shares-sum-to-1?) ""
+  set failures failures + check "every policy can reproduce" (all-policies-can-reproduce?) ""
+  set failures failures + check "births stop at carrying capacity" (births-respect-capacity?) ""
+  set failures failures + check "calm prey forage, whatever their policy" (calm-prey-forage?) ""
+  set failures failures + check "foragers stay in their home range" (foragers-stay-home?) ""
+  set failures failures + check "foragers prefer cover" (foragers-prefer-cover?) ""
+  set failures failures + check "jetting runs out, then the octopus hides" (jetting-is-limited?) ""
+  set failures failures + check "a jetting neighbour alarms a forager" (social-alarm-works?) ""
+  set failures failures + check "same seed reproduces run" (deterministic-replay?) ""
+
+  output-print ""
+  output-print ifelse-value failures = 0 [ "RESULT: PASS" ] [ (word "RESULT: FAIL (" failures " checks failed)") ]
+end
+
+to-report policy-shares-sum-to-1?
+  let saved-mode octopus-strategy-mode
+  set octopus-strategy-mode "experimental-assigned"
+  setup
+  repeat 100 [ go ]
+  let total sum map [p -> policy-share p] ["still" "hide" "flee" "seek-cover" "adaptive-dmas"]
+  set octopus-strategy-mode saved-mode
+  report not any? octopuses or abs (total - 1) < 0.00000001
+end
+
+;; Predator-free world: every policy must produce at least one birth.
+to-report all-policies-can-reproduce?
+  let saved (list octopus-strategy-mode initial-predators enable-reproduction? birth-chance)
+  set initial-predators 0
+  set enable-reproduction? true
+  set birth-chance 0.01
+  let ok? true
+  foreach ["hide" "flee" "still" "seek-cover" "adaptive-dmas"] [ a-policy ->
+    set octopus-strategy-mode a-policy
+    setup
+    repeat 150 [ go ]
+    if total-births = 0 [
+      set ok? false
+      output-print (word "        policy " a-policy " produced no births")
+    ]
+  ]
+  restore-settings saved
+  report ok?
+end
+
+;; Predator-free world at high birth chance: grows close to, but never past, the cap.
+to-report births-respect-capacity?
+  let saved (list octopus-strategy-mode initial-predators enable-reproduction? birth-chance)
+  set initial-predators 0
+  set enable-reproduction? true
+  set birth-chance 0.05
+  setup
+  repeat 400 [ go ]
+  let ok? max population-history <= carrying-capacity and count octopuses > 0.8 * carrying-capacity
+  restore-settings saved
+  report ok?
+end
+
+;; Prey that have not noticed a predator forage, whatever their policy. This also guards the old
+;; bug where fleeing prey ran from predators anywhere on the map.
+to-report calm-prey-forage?
+  let saved-mode octopus-strategy-mode
+  let ok? true
+  foreach ["hide" "flee" "still" "seek-cover" "adaptive-dmas"] [ a-policy ->
+    set octopus-strategy-mode a-policy
+    setup
+    let calm octopuses with [not threat-is-relevant? nearest-predator]
+    ask calm [ execute-prey-logic ]
+    if not (any? calm and all? calm [active-strategy = "forage" and not is-hidden?]) [
+      set ok? false
+      output-print (word "        policy " a-policy ": a calm prey did not forage")
+    ]
+  ]
+  set octopus-strategy-mode saved-mode
+  report ok?
+end
+
+;; Predator-free world: foragers wander but stay close to their home patch.
+to-report foragers-stay-home?
+  let saved (list octopus-strategy-mode initial-predators enable-reproduction? birth-chance)
+  set initial-predators 0
+  set enable-reproduction? false
+  setup
+  repeat 1000 [ go ]
+  let moved? any? octopuses with [patch-here != home-patch]
+  let ok? moved? and all? octopuses [distance home-patch <= home-range-radius + 1]
+  restore-settings saved
+  report ok?
+end
+
+;; Predator-free patchy world: foragers spend more time on cover than the world average.
+to-report foragers-prefer-cover?
+  let saved (list octopus-strategy-mode initial-predators enable-reproduction? birth-chance)
+  set initial-predators 0
+  set enable-reproduction? false
+  setup
+  repeat 300 [ go ]
+  let ok? mean [cover-density] of octopuses > realized-cover-mean
+  restore-settings saved
+  report ok?
+end
+
+;; A fleeing octopus jets for max-jet-time ticks, then camouflages in place.
+to-report jetting-is-limited?
+  setup
+  let ok? true
+  ask one-of octopuses [
+    let threat one-of predators
+    let jets 0
+    repeat max-jet-time + 3 [
+      set active-strategy "flee"
+      perform-flee threat
+      if is-moving? [ set jets jets + 1 ]
+    ]
+    set ok? (jets = max-jet-time and is-hidden? and active-strategy = "hide")
+  ]
+  report ok?
+end
+
+;; With social-alarm? on, a forager next to a jetting neighbour stops foraging; with it off, it does not.
+to-report social-alarm-works?
+  let saved (list octopus-strategy-mode initial-predators enable-reproduction? birth-chance)
+  let saved-alarm social-alarm?
+  set initial-predators 0
+  set octopus-strategy-mode "hide"
+  let results []
+  foreach [true false] [ alarm-on ->
+    set social-alarm? alarm-on
+    setup
+    let jetter one-of octopuses
+    ask jetter [ set active-strategy "flee" set is-moving? true ]
+    let watcher one-of other octopuses
+    ask watcher [
+      move-to jetter
+      fd 1
+      execute-prey-logic
+      set results lput (active-strategy != "forage") results
+    ]
+  ]
+  set social-alarm? saved-alarm
+  restore-settings saved
+  report results = [true false]
+end
+
+to restore-settings [saved]
+  set octopus-strategy-mode item 0 saved
+  set initial-predators item 1 saved
+  set enable-reproduction? item 2 saved
+  set birth-chance item 3 saved
+end
+
+to-report deterministic-replay?
+  setup
+  repeat 60 [ go ]
+  let first-run run-signature
+  setup
+  repeat 60 [ go ]
+  report first-run = run-signature
+end
+
+to-report run-signature
+  report (list population-history total-births total-captures action-ticks
+    precision realized-cover-mean 8 precision (sum [xcor + ycor] of turtles) 6)
+end
+
+;; 0 when the condition holds, 1 when it fails, so callers can sum failures.
+to-report check [check-name condition detail]
+  if condition [
+    output-print (word "  ok    " check-name)
+    report 0
+  ]
+  output-print (word "  FAIL  " check-name ifelse-value detail = "" [ "" ] [ (word "  -- " detail) ])
+  report 1
+end

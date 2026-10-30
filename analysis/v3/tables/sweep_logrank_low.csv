@@ -1,0 +1,6 @@
+a,b,extinct_a,extinct_b,n,chi2,p,p_holm
+adaptive-dmas,flee,10,20,40,5.393,0.02022,0.06065
+adaptive-dmas,hide,10,28,40,15.51,8.214e-05,0.0004107
+adaptive-dmas,still,10,26,40,13.65,0.0002205,0.0008822
+adaptive-dmas,seek-cover,10,17,40,2.973,0.08466,0.08466
+adaptive-dmas,experimental-assigned,10,19,40,4.357,0.03686,0.07373

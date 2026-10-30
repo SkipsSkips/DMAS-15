@@ -1,0 +1,55 @@
+;; Model constants. Everything else (population, speeds, predator detection radius,
+;; environment, strategy, reproduction, display) is an Interface widget.
+;; Scale: 1 patch = 1 m, 1 tick = 1 s. Values and sources: docs/PARAMETERS.md.
+
+to set-model-constants
+  ;; predators
+  set capture-distance 0.5
+  set predator-wander-angle 15
+  set predator-search-speed-factor 0.5  ;; search speed as a fraction of chase speed
+  set handling-time 20                  ;; s a predator spends eating after a capture, ignoring prey
+
+  ;; prey: normal behaviour when no predator is noticed (foraging)
+  set crawl-speed 0.09                  ;; m/s; O. vulgaris crawls ~9 cm/s (Wells 1990)
+  set forage-pause-chance 0.25          ;; O. vulgaris is stationary ~25% of foraging time (Mather 1991)
+  set open-ground-weight 0.1            ;; preference for cover while foraging; lower = stronger preference
+  set home-range-radius 10              ;; m; adults stay ~10 m from their den (Papadopoulo et al. 2024)
+  set calm-down-time 20                 ;; ticks an alarmed prey waits after losing the predator before foraging again
+  set alarm-radius 5                    ;; m; a jetting neighbour this close alarms a foraging prey (social-alarm?)
+
+  ;; jetting: a sprint, not a way of travelling (the heart stops during jetting; Wells et al. 1987)
+  set max-jet-time 5                    ;; s of jetting before the octopus is spent (~3 m at 0.6 m/s)
+  set jet-recovery-rate 0.1             ;; s of jetting regained per s not jetting (empty to full in 50 s)
+
+  ;; detection model (radius shrinks with cover, more if hiding; grows if moving)
+  set cover-impact-strength 0.8         ;; full cover shrinks a predator's detection radius by up to 80%
+  set hide-detection-multiplier 0.15    ;; camouflage = 1 - this
+  set motion-detection-multiplier 1.5   ;; moving prey are seen 1.5x further away
+  set prey-reaction-time-setting 2      ;; ticks a foraging prey stops to assess a predator it has just noticed
+
+  ;; individual differences: 0 = identical prey; 0.25 = ~25% spread in speed, camouflage and detection range
+  set trait-variation 0
+
+  ;; prey decisions
+  set threat-awareness-radius 10        ;; base prey detection range
+  set minimum-cover-target 0.6          ;; cover worth moving to for seek-cover
+  set seek-cover-radius 5
+  set minimum-cover-improvement 0.10
+
+  ;; environment: target mean cover for each cover-amount-category
+  set cover-target-low 0.15
+  set cover-target-medium 0.45
+  set cover-target-high 0.75
+
+  ;; environment: pattern generation, before rescaling to the target
+  set uniform-cover-noise 0.035         ;; sd of per-patch noise
+  set patchy-background-noise 0.025     ;; background is random 0 to this
+  set reef-cluster-count 15
+  set reef-cluster-radius 3
+  set cluster-base-strength 0.30        ;; cluster patches add base + random 0 to cluster-random-strength
+  set cluster-random-strength 0.70
+
+  ;; reproduction
+  set carrying-capacity 250
+  set offspring-mutation-fraction 0.5   ;; offspring trait noise as a fraction of trait-variation
+end
